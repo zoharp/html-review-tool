@@ -94,7 +94,7 @@ See `ops.md` for how to run locally, deploy to Fly.io, and run the test suite.
 ---
 
 ## Skills
- 
+
 | When | Skill |
 |---|---|
 | Committing / pushing to GitHub | `/deploy` |
