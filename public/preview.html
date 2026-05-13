@@ -1,0 +1,788 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Preview — HTML Review Tool</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --blue:   #1a73e8;
+    --green:  #34a853;
+    --red:    #ea4335;
+    --bg:     #f8f9fa;
+    --card:   #ffffff;
+    --border: #e0e0e0;
+    --text:   #202124;
+    --muted:  #5f6368;
+    --radius: 8px;
+    --header: 52px;
+    --sidebar: 340px;
+  }
+
+  html, body { height: 100%; overflow: hidden; font-family: 'Segoe UI', Arial, sans-serif; background: var(--bg); color: var(--text); }
+
+  /* ── Header ── */
+  header {
+    height: var(--header); background: #fff; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; padding: 0 16px; gap: 12px; flex-shrink: 0;
+    position: fixed; top: 0; left: 0; right: 0; z-index: 100; box-shadow: 0 1px 4px rgba(0,0,0,.1);
+  }
+  .header-title { font-size: 14px; font-weight: 600; flex: 1; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  .header-badge { font-size: 12px; background: #e8f0fe; color: var(--blue); border-radius: 10px; padding: 3px 10px; font-weight: 600; }
+  .btn-sm { border: 1px solid var(--border); background: var(--bg); border-radius: 6px; padding: 5px 12px; font-size: 12px; cursor: pointer; color: var(--text); }
+  .btn-sm:hover { background: var(--border); }
+
+  /* ── Version bar ── */
+  #version-bar {
+    display: none; position: fixed; top: var(--header); left: 0; right: 0; z-index: 90;
+    background: #fff; border-bottom: 1px solid var(--border); min-height: 36px;
+    align-items: center; padding: 0 16px; gap: 6px; flex-wrap: wrap;
+    font-size: 12px; color: var(--muted);
+  }
+  #version-bar.visible { display: flex; }
+  .ver-tab {
+    border: 1px solid var(--border); background: var(--bg); border-radius: 5px;
+    padding: 3px 12px; font-size: 12px; cursor: pointer; color: var(--muted); white-space: nowrap;
+  }
+  .ver-tab.active { background: var(--blue); border-color: var(--blue); color: #fff; font-weight: 600; }
+  .ver-tab.diff-tab.active { background: #6a1b9a; border-color: #6a1b9a; }
+  .ver-tab:hover:not(.active) { background: var(--border); }
+
+  /* ── Track-changes diff view ── */
+  #diff-wrap {
+    display: none; flex: 1; overflow-y: auto; background: #fff; padding: 32px 48px;
+  }
+  #diff-content {
+    max-width: 820px; margin: 0 auto; font-size: 14px; line-height: 1.8;
+    font-family: Georgia, 'Times New Roman', serif; word-wrap: break-word;
+  }
+  #diff-content p { margin-bottom: 1em; }
+  #diff-content ins { background: #e6ffed; color: #1b5e20; text-decoration: none; }
+  #diff-content del { background: #ffeef0; color: #b31d28; }
+
+  /* ── Layout ── */
+  .layout {
+    display: flex; position: fixed; top: var(--header); bottom: 0; left: 0; right: 0;
+  }
+  .layout.with-version-bar { top: calc(var(--header) + 36px); }
+
+  /* ── iframe ── */
+  .iframe-wrap { flex: 1; overflow: hidden; position: relative; }
+  #preview-frame { width: 100%; height: 100%; border: none; display: block; }
+
+  /* ── Sidebar ── */
+  .sidebar {
+    width: var(--sidebar); flex-shrink: 0; background: var(--card);
+    border-left: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden;
+  }
+  .sidebar-header { padding: 12px 14px; border-bottom: 1px solid var(--border); }
+  .sidebar-header h3 { font-size: 13px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; }
+  .sidebar-header .sub { font-size: 11px; color: var(--muted); margin-top: 2px; }
+
+  /* ── Filter ── */
+  .filter-bar { display: flex; gap: 4px; padding: 8px 10px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+  .filter-btn { border: 1px solid var(--border); background: var(--card); color: var(--muted); border-radius: 20px; padding: 3px 10px; font-size: 11px; cursor: pointer; }
+  .filter-btn.active { border-color: var(--blue); color: var(--blue); background: #e8f0fe; font-weight: 600; }
+
+  /* ── Annotation cards ── */
+  .ann-list { flex: 1; overflow-y: auto; padding: 8px; }
+  .ann-card {
+    border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 12px;
+    margin-bottom: 8px; cursor: pointer; transition: border-color .15s, box-shadow .15s; background: #fff;
+  }
+  .ann-card:hover { border-color: var(--blue); }
+  .ann-card.highlighted { border-color: var(--blue); box-shadow: 0 0 0 2px rgba(26,115,232,.2); }
+
+  .ann-card-header { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+  .type-badge { font-size: 10px; font-weight: 700; border-radius: 4px; padding: 2px 6px; text-transform: uppercase; }
+  .badge-comment { background: #fff9c4; color: #f57f17; }
+  .badge-change  { background: #fce4ec; color: #c62828; }
+  .ann-who { font-size: 11px; color: var(--muted); margin-left: auto; }
+
+  .ann-selected-text { font-size: 12px; color: var(--muted); font-style: italic; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 4px; }
+  .ann-body { font-size: 13px; }
+  .ann-change-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .old-text { color: var(--red); text-decoration: line-through; background: #fce4ec; padding: 1px 5px; border-radius: 3px; font-size: 12px; }
+  .new-text { color: var(--green); background: #e8f5e9; padding: 1px 5px; border-radius: 3px; font-size: 12px; }
+
+  .ann-status { font-size: 10px; font-weight: 600; border-radius: 10px; padding: 2px 7px; margin-top: 6px; display: inline-block; }
+  .st-pending  { background: #fff3e0; color: #e65100; }
+  .st-accepted { background: #e8f5e9; color: #1b5e20; }
+  .st-rejected { background: #eeeeee; color: #616161; }
+
+  .empty-ann { text-align: center; color: var(--muted); padding: 40px 16px; font-size: 14px; line-height: 1.7; }
+
+  /* ── Selection toolbar (floating over iframe) ── */
+  #sel-toolbar {
+    position: fixed; display: none; z-index: 200;
+    background: #323232; border-radius: 8px; padding: 6px 8px; gap: 6px;
+    box-shadow: 0 4px 16px rgba(0,0,0,.3); align-items: center;
+    white-space: nowrap;
+  }
+  #sel-toolbar button {
+    background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.2);
+    color: #fff; border-radius: 5px; padding: 5px 12px; font-size: 12px; cursor: pointer;
+    transition: background .12s;
+  }
+  #sel-toolbar button:hover { background: rgba(255,255,255,.22); }
+  #sel-toolbar .sel-text { color: rgba(255,255,255,.6); font-size: 11px; max-width: 160px; overflow: hidden; text-overflow: ellipsis; }
+
+  /* ── Annotation form modal ── */
+  #ann-modal {
+    position: fixed; inset: 0; background: rgba(0,0,0,.45); display: none;
+    align-items: center; justify-content: center; z-index: 300;
+  }
+  #ann-modal.open { display: flex; }
+  .modal-card { background: #fff; border-radius: 12px; padding: 28px; width: 460px; max-width: calc(100vw - 32px); box-shadow: 0 12px 40px rgba(0,0,0,.25); }
+  .modal-card h3 { font-size: 16px; font-weight: 700; margin-bottom: 6px; }
+  .modal-card .preview { font-size: 13px; font-style: italic; background: #f5f5f5; border-left: 3px solid var(--border); padding: 6px 10px; border-radius: 4px; margin-bottom: 18px; color: var(--muted); max-height: 70px; overflow: hidden; }
+  .modal-label { font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .4px; margin-bottom: 6px; }
+  textarea { width: 100%; border: 1px solid var(--border); border-radius: 7px; padding: 10px 12px; font-size: 13px; outline: none; resize: vertical; min-height: 80px; font-family: inherit; transition: border-color .15s; }
+  textarea:focus { border-color: var(--blue); }
+  .modal-actions { display: flex; gap: 8px; margin-top: 16px; justify-content: flex-end; }
+  .btn-primary { background: var(--blue); color: #fff; border: none; border-radius: 7px; padding: 9px 20px; font-size: 13px; font-weight: 600; cursor: pointer; }
+  .btn-primary:hover { background: #1557b0; }
+  .btn-cancel  { background: var(--bg); border: 1px solid var(--border); border-radius: 7px; padding: 9px 16px; font-size: 13px; cursor: pointer; }
+  .btn-cancel:hover { background: var(--border); }
+
+  .spin { display: inline-block; width: 16px; height: 16px; border: 2px solid rgba(255,255,255,.4); border-top-color: #fff; border-radius: 50%; animation: spin .6s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── Reply threads ── */
+  .reply-thread { margin-top: 8px; border-top: 1px solid var(--border); padding-top: 8px; display: none; }
+  .reply-thread.open { display: block; }
+  .reply-msg { display: flex; gap: 6px; margin-bottom: 6px; }
+  .reply-avatar { width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 700; color: #fff; flex-shrink: 0; margin-top: 1px; }
+  .reply-bubble { flex: 1; background: var(--bg); border-radius: 0 7px 7px 7px; padding: 5px 8px; font-size: 12px; }
+  .reply-meta { font-size: 10px; color: var(--muted); margin-bottom: 2px; }
+  .reply-input-row { display: flex; gap: 5px; margin-top: 6px; }
+  .reply-input-row input { flex: 1; border: 1px solid var(--border); border-radius: 6px; padding: 5px 8px; font-size: 12px; outline: none; }
+  .reply-input-row input:focus { border-color: var(--blue); }
+  .reply-send-btn { background: var(--blue); color: #fff; border: none; border-radius: 6px; padding: 5px 10px; font-size: 12px; cursor: pointer; }
+  .reply-toggle { font-size: 11px; color: var(--blue); cursor: pointer; background: none; border: none; padding: 2px 0; margin-top: 4px; display: block; }
+  .reply-toggle:hover { text-decoration: underline; }
+
+  /* ── Toast ── */
+  #toast { position: fixed; bottom: 20px; right: 20px; background: #323232; color: #fff; border-radius: 8px; padding: 11px 18px; font-size: 13px; display: none; z-index: 400; box-shadow: 0 4px 12px rgba(0,0,0,.3); }
+  #toast.show { display: block; animation: fadeIn .2s; }
+  #toast.success { background: var(--green); }
+  #toast.error   { background: var(--red); }
+  @keyframes fadeIn { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
+  /* ── Presence indicators ── */
+  #presence-container { display: flex; gap: 8px; align-items: center; margin-right: 16px; }
+  .presence-circle {
+    width: 32px; height: 32px; border-radius: 50%; display: flex;
+    align-items: center; justify-content: center; font-size: 13px;
+    font-weight: 700; color: #fff; position: relative; cursor: default;
+  }
+  .presence-tooltip {
+    position: absolute; bottom: -50px; left: 50%; transform: translateX(-50%);
+    background: #2c3e50; color: #fff; padding: 8px 12px; border-radius: 6px;
+    font-size: 12px; white-space: nowrap; opacity: 0; pointer-events: none;
+    transition: opacity .15s; z-index: 1001; font-weight: 400;
+    box-shadow: 0 2px 8px rgba(0,0,0,.3);
+  }
+  .presence-circle:hover .presence-tooltip { opacity: 1; }
+  .presence-tooltip::before {
+    content: ""; position: absolute; top: -6px; left: 50%;
+    transform: translateX(-50%); border: 6px solid transparent;
+    border-bottom-color: #2c3e50;
+  }
+
+  footer { position: fixed; bottom: 12px; right: 16px; font-size: 12px; color: rgba(0,0,0,.5); z-index: 999; }
+</style>
+</head>
+<body>
+
+<!-- ── Header ──────────────────────────────────────────────── -->
+<header>
+  <span style="font-size:20px;">👁</span>
+  <div class="header-title" id="file-title">Loading preview…</div>
+  <span class="header-badge">Admin Preview</span>
+  <button class="btn-sm" onclick="window.close()">✕ Close</button>
+  <div id="presence-container"></div>
+</header>
+
+<!-- ── Version bar ─────────────────────────────────────────── -->
+<div id="version-bar">
+  <span style="flex-shrink:0;margin-right:2px;">Version:</span>
+  <div id="ver-tabs" style="display:flex;gap:4px;flex-wrap:wrap;"></div>
+  <button class="ver-tab diff-tab" id="ver-tab-diff" style="display:none;margin-left:8px;" onclick="switchToDiff()">🔀 Track Changes</button>
+</div>
+
+<div class="layout" id="main-layout">
+  <!-- iframe with the document + annotation highlights -->
+  <div class="iframe-wrap" id="iframe-wrap">
+    <iframe id="preview-frame" src="about:blank" sandbox="allow-scripts allow-same-origin"></iframe>
+  </div>
+  <!-- Track-changes diff panel -->
+  <div id="diff-wrap">
+    <div id="diff-content"></div>
+  </div>
+
+  <!-- Annotation sidebar -->
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      <h3>All Annotations</h3>
+      <div class="sub" id="ann-count">Loading…</div>
+    </div>
+    <div class="filter-bar">
+      <button class="filter-btn active" onclick="setFilter('all',this)">All</button>
+      <button class="filter-btn" onclick="setFilter('pending',this)">Pending</button>
+      <button class="filter-btn" onclick="setFilter('accepted',this)">Accepted</button>
+      <button class="filter-btn" onclick="setFilter('rejected',this)">Rejected</button>
+    </div>
+    <div class="ann-list" id="ann-list">
+      <div class="empty-ann">Loading annotations…</div>
+    </div>
+  </aside>
+</div>
+
+<!-- ── Selection toolbar ────────────────────────────────────── -->
+<div id="sel-toolbar">
+  <span class="sel-text" id="sel-preview"></span>
+  <button onclick="openModal('comment')">💬 Comment</button>
+  <button onclick="openModal('change')">✏️ Suggest Change</button>
+</div>
+
+<!-- ── Annotation modal ─────────────────────────────────────── -->
+<div id="ann-modal">
+  <div class="modal-card">
+    <h3 id="modal-title">Add Comment</h3>
+    <div class="preview" id="modal-preview"></div>
+    <div id="modal-comment-group">
+      <div class="modal-label">Your comment</div>
+      <textarea id="modal-comment" placeholder="Type your comment here…"></textarea>
+    </div>
+    <div id="modal-change-group" style="display:none;">
+      <div class="modal-label">Suggested replacement text</div>
+      <textarea id="modal-change" placeholder="Type the suggested replacement…"></textarea>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeModal()">Cancel</button>
+      <button class="btn-primary" id="modal-submit" onclick="submitAnnotation()">Save</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+'use strict';
+
+var fileId        = null;
+var annotations   = [];
+var activeAnnId   = null;
+var annFilter     = 'all';
+var versionChain  = [];
+var viewingFileId = null;
+var diffMode      = false;
+var pendingSelection = null;
+var modalType   = null;
+
+// ── Boot ──────────────────────────────────────────────────────
+(async function boot(){
+  var p = new URLSearchParams(location.search);
+  fileId = p.get('fileId');
+  if(!fileId){ document.getElementById('file-title').textContent = 'No file specified'; return; }
+
+  try {
+    await api('GET', '/api/admin/me');
+  } catch(e){
+    document.getElementById('file-title').textContent = 'Not authorised — please log in as admin first';
+    return;
+  }
+
+  viewingFileId = fileId;
+  // Start presence tracking
+  startPresenceTracking(fileId);
+  // Load iframe
+  document.getElementById('preview-frame').src = '/api/admin/preview/file/' + fileId;
+  // Load annotations + version chain in parallel
+  await Promise.all([loadAnnotations(), loadChain()]);
+
+  // Setup text selection listener in iframe
+  setupIframeSelectionListener();
+})();
+
+// ── Version chain ─────────────────────────────────────────────
+async function loadChain(){
+  try {
+    var data = await api('GET', '/api/admin/files/' + fileId + '/chain');
+    if(!data.chain || data.chain.length < 2) return;
+    versionChain = data.chain;
+    document.getElementById('version-bar').classList.add('visible');
+    document.getElementById('main-layout').classList.add('with-version-bar');
+    document.getElementById('ver-tab-diff').style.display = 'inline-block';
+    renderVersionTabs();
+  } catch(e){}
+}
+
+function renderVersionTabs(){
+  var tabsEl = document.getElementById('ver-tabs');
+  tabsEl.innerHTML = versionChain.map(function(f, i){
+    var vNum   = i + 1;
+    var isLast = i === versionChain.length - 1;
+    var active = f.id === viewingFileId && !diffMode;
+    var label  = isLast ? ('v' + vNum + ' current ✓') : ('v' + vNum + ' — read only');
+    return '<button class="ver-tab' + (active ? ' active' : '') + '" onclick="switchVersion(\'' + f.id + '\')">' + label + '</button>';
+  }).join('');
+  var diffBtn = document.getElementById('ver-tab-diff');
+  if(diffBtn) diffBtn.classList.toggle('active', diffMode);
+}
+
+async function switchVersion(fId){
+  if(fId === viewingFileId && !diffMode) return;
+  diffMode      = false;
+  viewingFileId = fId;
+  renderVersionTabs();
+  document.getElementById('diff-wrap').style.display   = 'none';
+  document.getElementById('iframe-wrap').style.display = 'flex';
+  document.getElementById('preview-frame').src = '/api/admin/preview/file/' + fId;
+  // reload annotations for selected version
+  var savedFileId = fileId;
+  fileId = fId;
+  await loadAnnotations();
+  fileId = savedFileId;
+}
+
+async function switchToDiff(){
+  if(diffMode) return;
+  diffMode = true;
+  renderVersionTabs();
+  var chain = versionChain;
+  if(chain.length < 2){ return; }
+  var currentId  = chain[chain.length - 1].id;
+  var previousId = chain[chain.length - 2].id;
+  document.getElementById('iframe-wrap').style.display = 'none';
+  document.getElementById('diff-wrap').style.display   = 'flex';
+  document.getElementById('diff-content').innerHTML = '<em style="color:#888">Computing diff…</em>';
+  try {
+    var results = await Promise.all([
+      fetch('/api/admin/file/' + previousId + '/raw', {credentials:'include'}).then(function(r){ return r.text(); }),
+      fetch('/api/admin/file/' + currentId  + '/raw', {credentials:'include'}).then(function(r){ return r.text(); }),
+    ]);
+    var oldText = htmlToText(results[0]);
+    var newText = htmlToText(results[1]);
+    var ops = computeDiff(oldText, newText);
+    document.getElementById('diff-content').innerHTML = renderDiffOps(ops);
+  } catch(e){
+    document.getElementById('diff-content').innerHTML = '<em style="color:red">Failed: ' + esc(e.message) + '</em>';
+  }
+}
+
+function htmlToText(html){
+  var doc = new DOMParser().parseFromString(html, 'text/html');
+  doc.querySelectorAll('script,style').forEach(function(el){ el.remove(); });
+  doc.querySelectorAll('p,div,h1,h2,h3,h4,h5,h6,li,br,tr').forEach(function(el){
+    el.after(doc.createTextNode('\n'));
+  });
+  var raw = doc.body ? doc.body.innerText : '';
+  return raw.replace(/[ \t]+/g, ' ').replace(/\n{3,}/g, '\n\n').trim();
+}
+
+function computeDiff(oldText, newText){
+  function tok(s){
+    var out = [];
+    s.split(/(\n\n+)/).forEach(function(part){
+      if(/^\n/.test(part)){ out.push('\n\n'); }
+      else { var ws = part.match(/\S+/g); if(ws) out.push.apply(out, ws); }
+    });
+    return out;
+  }
+  var a = tok(oldText), b = tok(newText);
+  var MAX = 4000;
+  if(a.length > MAX) a = a.slice(0, MAX);
+  if(b.length > MAX) b = b.slice(0, MAX);
+  var m = a.length, n = b.length;
+  var dp = [];
+  for(var ii=0;ii<=m;ii++){ dp[ii] = new Int32Array(n+1); }
+  for(var i=m-1;i>=0;i--)
+    for(var j=n-1;j>=0;j--)
+      dp[i][j] = a[i]===b[j] ? dp[i+1][j+1]+1 : Math.max(dp[i+1][j], dp[i][j+1]);
+  var ops=[], x=0, y=0;
+  while(x<m||y<n){
+    if(x<m&&y<n&&a[x]===b[y]){ ops.push({t:'=',s:a[x]}); x++; y++; }
+    else if(y<n&&(x>=m||dp[x][y+1]>=dp[x+1][y])){ ops.push({t:'+',s:b[y]}); y++; }
+    else{ ops.push({t:'-',s:a[x]}); x++; }
+  }
+  return ops;
+}
+
+function renderDiffOps(ops){
+  var html = '<p>';
+  ops.forEach(function(op){
+    if(op.s === '\n\n'){
+      if(op.t !== '-') html += '</p><p>';
+    } else {
+      var t = op.s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+      if(op.t==='=')       html += t + ' ';
+      else if(op.t==='+')  html += '<ins>'+t+'</ins> ';
+      else                 html += '<del>'+t+'</del> ';
+    }
+  });
+  return html + '</p>';
+}
+
+// ── Annotations ───────────────────────────────────────────────
+async function loadAnnotations(){
+  try {
+    annotations = await api('GET', '/api/admin/annotations?fileId=' + fileId);
+    // Try to get file name
+    try {
+      var files = await api('GET', '/api/admin/files');
+      var f = files.find(function(x){ return x.id === fileId; });
+      if(f) document.getElementById('file-title').textContent = f.name;
+    } catch(e){}
+    renderSidebar();
+  } catch(e){
+    document.getElementById('ann-list').innerHTML = '<div class="empty-ann">Failed to load annotations.</div>';
+  }
+}
+
+function setFilter(f, btn){
+  annFilter = f;
+  document.querySelectorAll('.filter-btn').forEach(function(b){ b.classList.remove('active'); });
+  btn.classList.add('active');
+  renderSidebar();
+}
+
+function renderSidebar(){
+  var el = document.getElementById('ann-list');
+  var ct = document.getElementById('ann-count');
+
+  var rows = annFilter === 'all' ? annotations : annotations.filter(function(a){ return a.status === annFilter; });
+  ct.textContent = annotations.length + ' annotation' + (annotations.length !== 1 ? 's' : '');
+
+  if(!rows.length){
+    el.innerHTML = '<div class="empty-ann">No annotations' + (annFilter !== 'all' ? ' with status "' + annFilter + '"' : '') + '.</div>';
+    return;
+  }
+
+  el.innerHTML = rows.map(function(a){
+    var typeB = a.type === 'comment'
+      ? '<span class="type-badge badge-comment">💬 Comment</span>'
+      : '<span class="type-badge badge-change">✏️ Change</span>';
+
+    var body = a.type === 'comment'
+      ? '<div class="ann-body">' + esc(a.comment) + '</div>'
+      : '<div class="ann-change-row ann-body">' +
+          '<span class="old-text">' + esc(a.selected_text) + '</span>' +
+          '<span style="color:var(--muted)">→</span>' +
+          '<span class="new-text">' + esc(a.suggested_text) + '</span>' +
+        '</div>';
+
+    var statusBadge = '<span class="ann-status st-' + a.status + '">' +
+      (a.status === 'accepted' ? '✓ Accepted' : a.status === 'rejected' ? '✗ Rejected' : 'Pending review') +
+      '</span>';
+
+    return '<div class="ann-card ' + (a.id === activeAnnId ? 'highlighted' : '') + '" id="ann-card-' + a.id + '" onclick="focusAnnotation(\'' + a.id + '\')">' +
+      '<div class="ann-card-header">' + typeB + '<span class="ann-who">' + esc(a.reviewer_name || (a.reviewer_email||'').split('@')[0]) + '</span></div>' +
+      '<div class="ann-selected-text">"' + esc(a.selected_text) + '"</div>' +
+      body +
+      statusBadge +
+      '<button class="reply-toggle" onclick="event.stopPropagation();toggleReplies(\'' + a.id + '\')">💬 Discussion <span id="reply-count-' + a.id + '"></span></button>' +
+      '<div class="reply-thread" id="reply-thread-' + a.id + '">' +
+        '<div id="reply-msgs-' + a.id + '"></div>' +
+        '<div class="reply-input-row">' +
+          '<input type="text" id="reply-input-' + a.id + '" placeholder="Reply as admin…" onclick="event.stopPropagation()" onkeydown="event.stopPropagation();if(event.key===\'Enter\') submitReply(\'' + a.id + '\')">' +
+          '<button class="reply-send-btn" onclick="event.stopPropagation();submitReply(\'' + a.id + '\')">↩</button>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+}
+
+function focusAnnotation(id){
+  activeAnnId = id;
+  renderSidebar();
+  var card = document.getElementById('ann-card-' + id);
+  if(card) card.scrollIntoView({ behavior:'smooth', block:'nearest' });
+  var frame = document.getElementById('preview-frame');
+  frame.contentWindow && frame.contentWindow.postMessage({ type:'highlight-annotation', annotationId: id }, '*');
+}
+
+// ── Listen for annotation clicks from iframe ──────────────────
+window.addEventListener('message', function(e){
+  if(!e.data) return;
+  if(e.data.type === 'annotation-click') focusAnnotation(e.data.annotationId);
+});
+
+// ── Iframe text selection for admin annotations ──────────────────
+function setupIframeSelectionListener(){
+  var frame = document.getElementById('preview-frame');
+  if(!frame) return;
+  frame.addEventListener('load', function(){
+    try {
+      var doc = frame.contentDocument;
+      if(!doc) return;
+      doc.addEventListener('mouseup', handleIframeSelection);
+      doc.addEventListener('touchend', handleIframeSelection);
+    } catch(e) {}
+  });
+}
+
+function handleIframeSelection(){
+  var frame = document.getElementById('preview-frame');
+  var doc = frame.contentDocument;
+  if(!doc) { hideToolbar(); return; }
+  var selection = doc.getSelection();
+  if(!selection || !selection.toString().trim()){
+    hideToolbar();
+    return;
+  }
+  var selectedText = selection.toString();
+  var range = selection.getRangeAt(0);
+  var preRange = doc.createRange();
+  preRange.selectNodeContents(doc.body);
+  preRange.setEnd(range.startContainer, range.startOffset);
+  var contextBefore = preRange.toString().slice(-40);
+  var postRange = doc.createRange();
+  postRange.selectNodeContents(doc.body);
+  postRange.setStart(range.endContainer, range.endOffset);
+  var contextAfter = postRange.toString().slice(0, 40);
+  pendingSelection = { selectedText: selectedText, contextBefore: contextBefore, contextAfter: contextAfter };
+  document.getElementById('sel-preview').textContent = '"' + selectedText.slice(0, 50) + (selectedText.length > 50 ? '…' : '') + '"';
+  var rect = range.getBoundingClientRect();
+  var frameRect = frame.getBoundingClientRect();
+  var toolbar = document.getElementById('sel-toolbar');
+  toolbar.style.left = (frameRect.left + rect.left) + 'px';
+  toolbar.style.top = (frameRect.top + rect.top - 50) + 'px';
+  toolbar.style.display = 'flex';
+}
+
+function hideToolbar(){
+  document.getElementById('sel-toolbar').style.display = 'none';
+  pendingSelection = null;
+}
+
+function openModal(type){
+  if(!pendingSelection){ toast('Please select some text first', 'error'); return; }
+  modalType = type;
+  hideToolbar();
+  var title   = type === 'comment' ? '💬 Add Comment' : '✏️ Suggest a Change';
+  var preview = '"' + pendingSelection.selectedText + '"';
+  document.getElementById('modal-title').textContent   = title;
+  document.getElementById('modal-preview').textContent = preview;
+  document.getElementById('modal-comment').value = '';
+  document.getElementById('modal-change').value  = '';
+  document.getElementById('modal-comment-group').style.display = type === 'comment' ? 'block' : 'none';
+  document.getElementById('modal-change-group').style.display  = type === 'change'  ? 'block' : 'none';
+  document.getElementById('ann-modal').classList.add('open');
+  setTimeout(function(){
+    (type === 'comment'
+      ? document.getElementById('modal-comment')
+      : document.getElementById('modal-change')).focus();
+  }, 50);
+}
+
+function closeModal(){
+  document.getElementById('ann-modal').classList.remove('open');
+  var frame = document.getElementById('preview-frame');
+  if(frame && frame.contentDocument){
+    frame.contentDocument.getSelection().removeAllRanges();
+  }
+  pendingSelection = null;
+}
+
+document.getElementById('ann-modal').addEventListener('click', function(e){
+  if(e.target === this) closeModal();
+});
+
+async function submitAnnotation(){
+  if(!pendingSelection) return;
+  var btn = document.getElementById('modal-submit');
+  var comment     = document.getElementById('modal-comment').value.trim();
+  var suggestedText = document.getElementById('modal-change').value.trim();
+  if(modalType === 'comment' && !comment){ toast('Please enter a comment', 'error'); return; }
+  if(modalType === 'change' && !suggestedText){ toast('Please enter your suggested replacement', 'error'); return; }
+  btn.innerHTML = '<span class="spin"></span>';
+  btn.disabled  = true;
+  try {
+    var body = {
+      fileId:        fileId,
+      type:          modalType,
+      selectedText:  pendingSelection.selectedText,
+      contextBefore: pendingSelection.contextBefore,
+      contextAfter:  pendingSelection.contextAfter,
+    };
+    if(modalType === 'comment') body.comment = comment;
+    else body.suggestedText = suggestedText;
+    await api('POST', '/api/admin/annotations', body);
+    closeModal();
+    await loadAnnotations();
+    toast('Annotation saved ✓', 'success');
+  } catch(e){
+    toast(e.message, 'error');
+  } finally {
+    btn.innerHTML = 'Save';
+    btn.disabled  = false;
+  }
+}
+
+document.addEventListener('keydown', function(e){
+  if(e.key === 'Escape') closeModal();
+  if((e.ctrlKey || e.metaKey) && e.key === 'Enter' && document.getElementById('ann-modal').classList.contains('open')){
+    submitAnnotation();
+  }
+});
+
+// ── Reply threads ──────────────────────────────────────────────
+async function toggleReplies(annId){
+  var thread = document.getElementById('reply-thread-' + annId);
+  if(!thread) return;
+  if(thread.classList.contains('open')){
+    thread.classList.remove('open');
+  } else {
+    thread.classList.add('open');
+    await loadReplies(annId);
+  }
+}
+
+async function loadReplies(annId){
+  try {
+    var replies = await api('GET', '/api/admin/annotations/' + annId + '/replies');
+    renderReplies(annId, replies);
+    var countEl = document.getElementById('reply-count-' + annId);
+    if(countEl) countEl.textContent = replies.length ? '(' + replies.length + ')' : '';
+  } catch(e){}
+}
+
+function renderReplies(annId, replies){
+  var el = document.getElementById('reply-msgs-' + annId);
+  if(!el) return;
+  if(!replies.length){
+    el.innerHTML = '<div style="font-size:11px;color:var(--muted);padding:3px 0;">No replies yet.</div>';
+    return;
+  }
+  el.innerHTML = replies.map(function(r){
+    var isAdmin = r.author_role === 'admin';
+    var bg = isAdmin ? '#1a73e8' : avatarColor(r.author_name || r.author_email || '?');
+    var initial = (r.author_name || r.author_email || '?')[0].toUpperCase();
+    return '<div class="reply-msg">' +
+      '<div class="reply-avatar" style="background:' + bg + ';">' + initial + '</div>' +
+      '<div class="reply-bubble">' +
+        '<div class="reply-meta">' + esc(r.author_name || (isAdmin ? 'Admin' : r.author_email)) + ' · ' + timeAgo(r.created_at) + '</div>' +
+        esc(r.message) +
+      '</div></div>';
+  }).join('');
+}
+
+async function submitReply(annId){
+  var input = document.getElementById('reply-input-' + annId);
+  if(!input) return;
+  var body = input.value.trim();
+  if(!body) return;
+  try {
+    await api('POST', '/api/admin/annotations/' + annId + '/replies', { message: body });
+    input.value = '';
+    await loadReplies(annId);
+  } catch(e){ toast(e.message, 'error'); }
+}
+
+// ── Utilities ─────────────────────────────────────────────────
+async function api(method, url, body){
+  var opts = { method: method, credentials: 'include', headers: {} };
+  if(body){ opts.headers['Content-Type'] = 'application/json'; opts.body = JSON.stringify(body); }
+  var res = await fetch(url, opts);
+  if(!res.ok){ var j = await res.json().catch(function(){ return {}; }); throw new Error(j.error || res.statusText); }
+  return res.json().catch(function(){ return {}; });
+}
+
+function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+function toast(msg, type){
+  var t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'show ' + (type||'');
+  clearTimeout(t._tid);
+  t._tid = setTimeout(function(){ t.className = ''; }, 3000);
+}
+
+function timeAgo(iso){
+  var s = Math.floor((Date.now() - new Date(iso+'Z')) / 1000);
+  if(s < 60)    return 'just now';
+  if(s < 3600)  return Math.floor(s/60) + 'm ago';
+  if(s < 86400) return Math.floor(s/3600) + 'h ago';
+  return Math.floor(s/86400) + 'd ago';
+}
+
+function avatarColor(str){
+  var h = 0;
+  for(var i=0;i<str.length;i++) h = ((h<<5)-h)+str.charCodeAt(i);
+  var colors = ['#1a73e8','#34a853','#ea4335','#fbbc04','#9c27b0','#ff5722','#00bcd4'];
+  return colors[Math.abs(h) % colors.length];
+}
+
+// ── Presence Tracking ──────────────────────────────────────────
+var presenceFileId = null;
+var presenceUserId = null;
+var presencePollInterval = null;
+
+function updatePresenceDisplay(users){
+  var container = document.getElementById('presence-container');
+  if(!users || users.length === 0){
+    container.innerHTML = '';
+    return;
+  }
+  var colors = ['#667eea', '#f093fb', '#4facfe', '#43e97b', '#fa709a'];
+  var html = users.map(function(u, i){
+    if(u.userId === presenceUserId) return '';
+    var c = colors[i % colors.length];
+    return '<div class="presence-circle" style="background:' + c + ';">' + u.initial + '<div class="presence-tooltip">' + u.name + ' (' + u.email + ')</div></div>';
+  }).filter(Boolean).join('');
+  container.innerHTML = html;
+}
+
+async function pollPresence(){
+  if(!presenceFileId) return;
+  try {
+    var res = await fetch('/api/presence/active/' + presenceFileId);
+    if(res.ok){
+      updatePresenceDisplay(await res.json());
+    }
+  } catch(e) {}
+}
+
+async function setPresenceActive(){
+  if(!presenceFileId || !presenceUserId) return;
+  try {
+    await api('POST', '/api/presence/set-active', { fileId: presenceFileId });
+  } catch(e) {}
+}
+
+function startPresenceTracking(fileId){
+  presenceFileId = fileId;
+  if(!presenceUserId){
+    presenceUserId = localStorage.getItem('rv_userId');
+    if(!presenceUserId){
+      presenceUserId = 'u_' + Math.random().toString(36).substr(2, 9);
+      localStorage.setItem('rv_userId', presenceUserId);
+    }
+  }
+  if(presencePollInterval) clearInterval(presencePollInterval);
+  setPresenceActive();
+  presencePollInterval = setInterval(function(){
+    pollPresence();
+    setPresenceActive();
+  }, 2000);
+}
+
+function stopPresenceTracking(){
+  presenceFileId = null;
+  if(presencePollInterval) clearInterval(presencePollInterval);
+  updatePresenceDisplay([]);
+}
+
+</script>
+<script>
+fetch('/api/version').then(r => r.json()).then(d => {
+  const footer = document.querySelector('footer');
+  if(footer) footer.innerHTML = 'v' + d.version;
+}).catch(() => {});
+</script>
+
+<footer></footer>
+</body>

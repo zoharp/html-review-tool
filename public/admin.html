@@ -1,0 +1,1411 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HTML Review Tool — Admin</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --blue:   #1a73e8;
+    --blue2:  #1557b0;
+    --green:  #34a853;
+    --red:    #ea4335;
+    --orange: #fbbc04;
+    --bg:     #f8f9fa;
+    --card:   #ffffff;
+    --border: #e0e0e0;
+    --text:   #202124;
+    --muted:  #5f6368;
+    --radius: 8px;
+    --shadow: 0 1px 4px rgba(0,0,0,.12);
+  }
+
+  body { font-family: 'Segoe UI', Arial, sans-serif; background: var(--bg); color: var(--text); height: 100vh; overflow: hidden; display: flex; flex-direction: column; }
+
+  /* ── Header ── */
+  header { background: var(--blue); color: #fff; padding: 0 24px; height: 56px; display: flex; align-items: center; gap: 16px; flex-shrink: 0; box-shadow: 0 2px 6px rgba(0,0,0,.25); z-index: 10; }
+  header h1 { font-size: 18px; font-weight: 600; flex: 1; }
+  header button { background: rgba(255,255,255,.18); border: 1px solid rgba(255,255,255,.3); color: #fff; border-radius: 6px; padding: 6px 14px; cursor: pointer; font-size: 13px; }
+  header button:hover { background: rgba(255,255,255,.28); }
+
+  /* ── Toggle switch ── */
+  .toggle-track { width: 42px; height: 24px; border-radius: 12px; background: #ccc; position: relative; transition: background .2s; flex-shrink: 0; }
+  .toggle-track.on { background: var(--green); }
+  .toggle-thumb { width: 18px; height: 18px; border-radius: 50%; background: #fff; position: absolute; top: 3px; left: 3px; transition: left .2s; box-shadow: 0 1px 3px rgba(0,0,0,.3); }
+  .toggle-track.on .toggle-thumb { left: 21px; }
+
+  /* ── Layout ── */
+  .layout { display: flex; flex: 1; overflow: hidden; }
+
+  /* ── Left sidebar – file list ── */
+  .sidebar {
+    width: 300px; flex-shrink: 0; background: var(--card); border-right: 1px solid var(--border);
+    display: flex; flex-direction: column; overflow: hidden;
+  }
+  .sidebar-header { padding: 16px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 8px; }
+  .sidebar-header h2 { font-size: 14px; font-weight: 600; flex: 1; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; }
+  .sidebar-list { flex: 1; overflow-y: auto; padding: 8px; }
+  .file-card {
+    border-radius: var(--radius); padding: 12px 14px; cursor: pointer; margin-bottom: 4px;
+    border: 1px solid transparent; transition: background .15s, border-color .15s;
+  }
+  .file-card:hover { background: var(--bg); }
+  .file-card.active { background: #e8f0fe; border-color: var(--blue); }
+  .file-card .fname { font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 4px; }
+  .file-card .fname-text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 1; }
+  .file-card .fmeta { font-size: 12px; color: var(--muted); margin-top: 4px; display: flex; gap: 10px; }
+  .badge { display: inline-flex; align-items: center; gap: 3px; }
+  .badge-dot { width: 7px; height: 7px; border-radius: 50%; }
+  .dot-blue   { background: var(--blue); }
+  .dot-orange { background: var(--orange); }
+  .dot-green  { background: var(--green); }
+
+  /* ── Version badge ── */
+  .ver-badge { font-size: 10px; font-weight: 700; border-radius: 4px; padding: 2px 6px; margin-left: 4px; vertical-align: middle; }
+  .ver-badge-old { background: #eeeeee; color: #757575; }
+  .ver-badge-new { background: #e8f0fe; color: #1a73e8; }
+  .revision-card { margin-left: 14px; border-left: 2px solid var(--border); padding-left: 8px; }
+  .collapse-btn { background: none; border: none; cursor: pointer; font-size: 11px; color: var(--muted); padding: 0 3px 0 0; flex-shrink: 0; line-height: 1; }
+  .collapse-btn:hover { color: var(--text); }
+
+  .upload-area {
+    margin: 8px; border: 2px dashed var(--border); border-radius: var(--radius);
+    padding: 16px; text-align: center; cursor: pointer; transition: border-color .2s, background .2s;
+  }
+  .upload-area:hover, .upload-area.drag { border-color: var(--blue); background: #e8f0fe22; }
+  .upload-area p { font-size: 13px; color: var(--muted); margin-top: 6px; }
+  .upload-area input { display: none; }
+
+  /* ── Right content ── */
+  .content { flex: 1; overflow-y: auto; padding: 24px; display: flex; flex-direction: column; gap: 20px; }
+  .empty-state { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--muted); gap: 12px; }
+  .empty-state svg { opacity: .3; }
+  .empty-state p { font-size: 15px; }
+
+  /* ── Panel ── */
+  .panel { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; }
+  .panel-header { padding: 14px 18px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 10px; }
+  .panel-header h3 { font-size: 15px; font-weight: 600; flex: 1; }
+  .panel-body { padding: 16px 18px; }
+
+  /* ── Tabs ── */
+  .tabs { display: flex; gap: 2px; background: var(--bg); border-bottom: 1px solid var(--border); padding: 0 18px; }
+  .tab-btn { padding: 10px 16px; font-size: 13px; font-weight: 500; border: none; background: none; cursor: pointer; color: var(--muted); border-bottom: 2px solid transparent; margin-bottom: -1px; }
+  .tab-btn.active { color: var(--blue); border-bottom-color: var(--blue); }
+  .tab-pane { display: none; padding: 16px 18px; }
+  .tab-pane.active { display: block; }
+
+  /* ── Forms ── */
+  .form-row { display: flex; gap: 8px; align-items: flex-end; flex-wrap: wrap; margin-bottom: 16px; }
+  .form-group { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 140px; }
+  label { font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .4px; }
+  input[type=text], input[type=email], input[type=password], select {
+    border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; font-size: 13px;
+    width: 100%; outline: none; transition: border-color .15s;
+  }
+  input:focus, select:focus { border-color: var(--blue); }
+
+  /* ── Buttons ── */
+  .btn { border: none; border-radius: 6px; padding: 8px 16px; font-size: 13px; font-weight: 500; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; transition: opacity .15s; }
+  .btn:hover { opacity: .87; }
+  .btn-primary  { background: var(--blue);  color: #fff; }
+  .btn-danger   { background: var(--red);   color: #fff; }
+  .btn-success  { background: var(--green); color: #fff; }
+  .btn-ghost    { background: var(--bg); border: 1px solid var(--border); color: var(--text); }
+  .btn-sm       { padding: 5px 10px; font-size: 12px; }
+  .btn:disabled { opacity: .5; cursor: default; }
+
+  /* ── Invite list ── */
+  .invite-row {
+    display: flex; align-items: center; gap: 10px; padding: 10px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .invite-row:last-child { border-bottom: none; }
+  .invite-avatar { width: 34px; height: 34px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; color: #fff; flex-shrink: 0; }
+  .invite-info { flex: 1; min-width: 0; }
+  .invite-info .iname { font-size: 13px; font-weight: 600; }
+  .invite-info .iemail { font-size: 12px; color: var(--muted); }
+  .invite-info .ifile  { font-size: 11px; color: var(--muted); }
+  .status-chip { font-size: 11px; font-weight: 600; border-radius: 10px; padding: 3px 8px; white-space: nowrap; }
+  .chip-pending  { background: #fff3e0; color: #e65100; }
+  .chip-accepted { background: #e8f5e9; color: #1b5e20; }
+  .chip-revoked  { background: #fce4ec; color: #880e4f; }
+
+  /* ── Annotation list ── */
+  .ann-row {
+    border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 14px;
+    margin-bottom: 10px; background: var(--card);
+  }
+  .ann-header { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .ann-type-chip { font-size: 11px; font-weight: 700; border-radius: 4px; padding: 2px 7px; text-transform: uppercase; }
+  .chip-comment { background: #fff9c4; color: #f57f17; }
+  .chip-change  { background: #fce4ec; color: #c62828; }
+  .chip-accepted-ann { background: #e8f5e9; color: #1b5e20; }
+  .chip-rejected-ann { background: #eeeeee; color: #616161; }
+  .ann-reviewer { font-size: 12px; color: var(--muted); }
+  .ann-selected { font-size: 13px; font-style: italic; background: #f5f5f5; border-left: 3px solid var(--border); padding: 4px 8px; border-radius: 3px; margin: 6px 0; max-height: 60px; overflow: hidden; }
+  .ann-content  { font-size: 13px; margin: 6px 0; }
+  .ann-change   { display: flex; align-items: flex-start; gap: 8px; font-size: 13px; }
+  .ann-old      { color: var(--red);   text-decoration: line-through; background: #fce4ec; padding: 2px 6px; border-radius: 3px; }
+  .ann-new      { color: var(--green); background: #e8f5e9; padding: 2px 6px; border-radius: 3px; }
+  .ann-arrow    { color: var(--muted); font-size: 16px; }
+  .ann-actions  { display: flex; gap: 6px; margin-top: 10px; }
+
+  /* ── Filter bar ── */
+  .filter-bar { display: flex; gap: 6px; margin-bottom: 14px; flex-wrap: wrap; }
+  .filter-btn { border: 1px solid var(--border); background: var(--card); color: var(--muted); border-radius: 20px; padding: 4px 12px; font-size: 12px; cursor: pointer; }
+  .filter-btn.active { border-color: var(--blue); color: var(--blue); background: #e8f0fe; font-weight: 600; }
+
+  /* ── Login overlay ── */
+  #login-overlay {
+    position: fixed; inset: 0; background: rgba(26,115,232,.95);
+    display: flex; align-items: center; justify-content: center; z-index: 100;
+  }
+  .login-card { background: #fff; border-radius: 12px; padding: 40px 36px; width: 360px; box-shadow: 0 8px 32px rgba(0,0,0,.25); }
+  .login-card h2 { font-size: 22px; font-weight: 700; margin-bottom: 6px; }
+  .login-card p  { color: var(--muted); font-size: 14px; margin-bottom: 24px; }
+  .login-card .form-group { margin-bottom: 16px; }
+  .login-card label { display: block; margin-bottom: 6px; }
+  .login-error { color: var(--red); font-size: 13px; margin-top: 8px; min-height: 18px; }
+
+  /* ── Toast ── */
+  #toast { position: fixed; bottom: 24px; right: 24px; background: #323232; color: #fff; border-radius: 8px; padding: 12px 20px; font-size: 13px; display: none; z-index: 200; box-shadow: 0 4px 12px rgba(0,0,0,.3); max-width: 320px; }
+  #toast.show { display: block; animation: fadeIn .2s; }
+  #toast.success { background: var(--green); }
+  #toast.error   { background: var(--red); }
+  @keyframes fadeIn { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
+
+  .empty-list { text-align: center; color: var(--muted); padding: 32px 0; font-size: 14px; }
+  .spin { display: inline-block; width: 16px; height: 16px; border: 2px solid rgba(255,255,255,.4); border-top-color: #fff; border-radius: 50%; animation: spin .6s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── Reply threads ── */
+  .reply-thread { margin-top: 10px; border-top: 1px solid var(--border); padding-top: 10px; display: none; }
+  .reply-thread.open { display: block; }
+  .reply-msg { display: flex; gap: 8px; margin-bottom: 8px; }
+  .reply-avatar { width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; color: #fff; flex-shrink: 0; margin-top: 1px; }
+  .reply-bubble { flex: 1; background: var(--bg); border-radius: 0 8px 8px 8px; padding: 7px 10px; font-size: 13px; }
+  .reply-meta { font-size: 11px; color: var(--muted); margin-bottom: 3px; }
+  .reply-input-row { display: flex; gap: 6px; margin-top: 8px; }
+  .reply-input-row input { flex: 1; border: 1px solid var(--border); border-radius: 6px; padding: 7px 10px; font-size: 13px; outline: none; }
+  .reply-input-row input:focus { border-color: var(--blue); }
+  .reply-toggle { font-size: 12px; color: var(--blue); cursor: pointer; background: none; border: none; padding: 0; margin-top: 4px; }
+  .reply-toggle:hover { text-decoration: underline; }
+  .reply-action-btn { font-size: 10px; color: var(--muted); cursor: pointer; margin-left: 8px; }
+  .reply-action-btn:hover { color: var(--text); text-decoration: underline; }
+  .reply-action-btn.reply-del:hover { color: var(--red); }
+
+  /* ── Textarea ── */
+  textarea { border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; font-size: 13px; width: 100%; outline: none; resize: vertical; font-family: inherit; transition: border-color .15s; }
+  textarea:focus { border-color: var(--blue); }
+  /* ── Presence Indicators ── */
+  #presence-container { display: flex; gap: 8px; align-items: center; margin-right: 16px; }
+  .presence-circle { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; color: #fff; position: relative; cursor: default; }
+  .presence-tooltip { position: absolute; bottom: -50px; left: 50%; transform: translateX(-50%); background: #2c3e50; color: #fff; padding: 8px 12px; border-radius: 6px; font-size: 12px; opacity: 0; pointer-events: none; transition: opacity .15s; z-index: 1001; }
+  .presence-circle:hover .presence-tooltip { opacity: 1; }
+  /* ── Presence Indicators ── */
+  #presence-container { display: flex; gap: 8px; align-items: center; margin-right: 16px; }
+  .presence-circle { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; color: #fff; position: relative; cursor: default; }
+  .presence-tooltip { position: absolute; bottom: -50px; left: 50%; transform: translateX(-50%); background: #2c3e50; color: #fff; padding: 8px 12px; border-radius: 6px; font-size: 12px; opacity: 0; pointer-events: none; transition: opacity .15s; z-index: 1001; }
+  .presence-circle:hover .presence-tooltip { opacity: 1; }
+</style>
+</head>
+<body>
+
+<!-- ── Login overlay ─────────────────────────────────────────── -->
+<div id="login-overlay">
+  <div class="login-card">
+    <h2>🔒 Admin Login</h2>
+    <p>Enter your admin password to continue.</p>
+    <div class="form-group">
+      <label>Password</label>
+      <input type="password" id="login-pw" placeholder="Your admin password" autocomplete="current-password">
+    </div>
+    <button class="btn btn-primary" style="width:100%" onclick="doLogin()">Sign in</button>
+    <div class="login-error" id="login-err"></div>
+  </div>
+</div>
+
+<!-- ── Header ───────────────────────────────────────────────── -->
+<header>
+  <h1>📋 HTML Review Tool</h1>
+  <span id="header-info" style="font-size:13px;opacity:.8;"></span>
+  <div id="presence-container"></div>
+  <div id="presence-container"></div>
+  <button onclick="openSettings()" title="Settings">⚙️ Settings</button>
+  <button onclick="doLogout()">Sign out</button>
+</header>
+
+<!-- ── Settings Modal ────────────────────────────────────────── -->
+<div id="settings-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1000;align-items:center;justify-content:center;">
+  <div style="background:#fff;border-radius:12px;padding:28px 32px;width:360px;box-shadow:0 8px 32px rgba(0,0,0,.2);">
+    <div style="display:flex;align-items:center;margin-bottom:20px;">
+      <h2 style="font-size:16px;font-weight:700;flex:1;">⚙️ Settings</h2>
+      <button onclick="closeSettings()" style="background:none;border:none;font-size:20px;cursor:pointer;color:#666;line-height:1;">×</button>
+    </div>
+
+    <div style="font-size:13px;font-weight:600;color:#5f6368;text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px;">Email Notifications</div>
+
+    <label style="display:flex;align-items:center;gap:12px;padding:14px;background:#f8f9fa;border-radius:8px;cursor:pointer;border:1px solid #e0e0e0;">
+      <span style="flex:1;">
+        <span style="font-size:14px;font-weight:500;display:block;">Admin digest emails</span>
+        <span style="font-size:12px;color:#5f6368;">Receive periodic summaries of new annotations and replies (max once every 2 hours)</span>
+      </span>
+      <div class="toggle-wrap" id="settings-notif-wrap" onclick="toggleNotifSetting(event)">
+        <input type="checkbox" id="settings-notif" style="display:none;">
+        <div class="toggle-track" id="settings-notif-track">
+          <div class="toggle-thumb" id="settings-notif-thumb"></div>
+        </div>
+      </div>
+    </label>
+
+    <p style="font-size:12px;color:#5f6368;margin-top:12px;">Reviewers can also opt out of their own notification emails from the reviewer interface or via the unsubscribe link in any email they receive.</p>
+
+    <div style="display:flex;justify-content:flex-end;margin-top:20px;">
+      <button onclick="closeSettings()" class="btn btn-primary btn-sm">Done</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Revision Modal ────────────────────────────────────────── -->
+<div id="revise-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1000;align-items:center;justify-content:center;">
+  <div style="background:#fff;border-radius:12px;padding:28px 32px;width:460px;box-shadow:0 8px 32px rgba(0,0,0,.2);">
+    <div style="display:flex;align-items:center;margin-bottom:8px;">
+      <h2 style="font-size:16px;font-weight:700;flex:1;">📄 Upload new revision</h2>
+      <button onclick="closeRevise()" style="background:none;border:none;font-size:20px;cursor:pointer;color:#666;line-height:1;">×</button>
+    </div>
+    <p style="font-size:13px;color:#5f6368;margin-bottom:16px;">Creating a new revision of: <strong id="revise-fname"></strong></p>
+
+    <div id="revise-drop"
+         onclick="document.getElementById('revise-file-input').click()"
+         ondragover="event.preventDefault();this.style.borderColor='#1a73e8';this.style.background='#e8f0fe22'"
+         ondragleave="this.style.borderColor='#e0e0e0';this.style.background=''"
+         ondrop="handleReviseDrop(event)"
+         style="border:2px dashed #e0e0e0;border-radius:8px;padding:20px;text-align:center;cursor:pointer;margin-bottom:16px;transition:border-color .2s,background .2s;">
+      <div style="font-size:28px;margin-bottom:6px;">📁</div>
+      <div id="revise-file-label" style="font-size:13px;color:#5f6368;">Click or drag new .html file here</div>
+      <input type="file" id="revise-file-input" accept=".html,text/html" style="display:none" onchange="selectReviseFile(this.files[0])">
+    </div>
+
+    <label style="display:flex;align-items:flex-start;gap:10px;padding:12px;background:#f8f9fa;border-radius:8px;margin-bottom:10px;cursor:pointer;border:1px solid #e0e0e0;">
+      <input type="checkbox" id="revise-reinvite" checked style="margin-top:3px;flex-shrink:0;">
+      <span>
+        <span style="font-size:14px;font-weight:500;display:block;">Re-invite current reviewers</span>
+        <span style="font-size:12px;color:#5f6368;">Send each reviewer a link to the new revision via email</span>
+      </span>
+    </label>
+
+    <label style="display:flex;align-items:flex-start;gap:10px;padding:12px;background:#f8f9fa;border-radius:8px;margin-bottom:20px;cursor:pointer;border:1px solid #e0e0e0;">
+      <input type="checkbox" id="revise-import" checked style="margin-top:3px;flex-shrink:0;">
+      <span>
+        <span style="font-size:14px;font-weight:500;display:block;">Import matching annotations</span>
+        <span style="font-size:12px;color:#5f6368;">Carry over comments and suggestions whose text still exists in the new version</span>
+      </span>
+    </label>
+
+    <div style="display:flex;justify-content:flex-end;gap:8px;">
+      <button onclick="closeRevise()" class="btn btn-ghost btn-sm">Cancel</button>
+      <button onclick="submitRevision()" id="revise-submit-btn" class="btn btn-primary btn-sm" disabled>Upload revision</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Replace File Modal ────────────────────────────────────── -->
+<div id="replace-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1000;align-items:center;justify-content:center;">
+  <div style="background:#fff;border-radius:12px;padding:28px 32px;width:460px;box-shadow:0 8px 32px rgba(0,0,0,.2);">
+    <div style="display:flex;align-items:center;margin-bottom:8px;">
+      <h2 style="font-size:16px;font-weight:700;flex:1;">📝 Replace file content</h2>
+      <button onclick="closeReplace()" style="background:none;border:none;font-size:20px;cursor:pointer;color:#666;line-height:1;">×</button>
+    </div>
+    <p style="font-size:13px;color:#5f6368;margin-bottom:4px;">Updating: <strong id="replace-fname"></strong></p>
+    <p style="font-size:12px;color:#e65100;background:#fff3e0;border-radius:6px;padding:8px 10px;margin-bottom:16px;">The file content will be replaced in place. No new revision will be created. Existing annotations remain linked but may no longer match if the text changed significantly.</p>
+
+    <div id="replace-drop"
+         onclick="document.getElementById('replace-file-input').click()"
+         ondragover="event.preventDefault();this.style.borderColor='#1a73e8';this.style.background='#e8f0fe22'"
+         ondragleave="this.style.borderColor='#e0e0e0';this.style.background=''"
+         ondrop="handleReplaceDrop(event)"
+         style="border:2px dashed #e0e0e0;border-radius:8px;padding:20px;text-align:center;cursor:pointer;margin-bottom:20px;transition:border-color .2s,background .2s;">
+      <div style="font-size:28px;margin-bottom:6px;">📁</div>
+      <div id="replace-file-label" style="font-size:13px;color:#5f6368;">Click or drag new .html file here</div>
+      <input type="file" id="replace-file-input" accept=".html,text/html" style="display:none" onchange="selectReplaceFile(this.files[0])">
+    </div>
+
+    <div style="display:flex;justify-content:flex-end;gap:8px;">
+      <button onclick="closeReplace()" class="btn btn-ghost btn-sm">Cancel</button>
+      <button onclick="submitReplace()" id="replace-submit-btn" class="btn btn-primary btn-sm" disabled>Replace content</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Edit HTML Text Modal ───────────────────────────────────── -->
+<div id="edit-html-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1000;align-items:center;justify-content:center;">
+  <div style="background:#fff;border-radius:12px;width:min(760px,94vw);max-height:90vh;box-shadow:0 8px 32px rgba(0,0,0,.2);display:flex;flex-direction:column;">
+    <!-- header -->
+    <div style="padding:20px 24px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;flex-shrink:0;">
+      <div style="flex:1;">
+        <h2 style="font-size:16px;font-weight:700;margin:0;">✏️ Edit text — <span id="edit-html-fname" style="font-weight:400;color:var(--muted);"></span></h2>
+        <p style="font-size:12px;color:var(--muted);margin:4px 0 0;">Only text is shown. Tags and structure are preserved on save.</p>
+      </div>
+      <button onclick="closeEditHtml()" style="background:none;border:none;font-size:22px;cursor:pointer;color:#999;line-height:1;margin-left:16px;">×</button>
+    </div>
+    <!-- block list -->
+    <div id="edit-html-blocks" style="flex:1;overflow-y:auto;padding:12px 24px;"></div>
+    <!-- footer -->
+    <div style="padding:14px 24px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px;flex-shrink:0;">
+      <button onclick="closeEditHtml()" class="btn btn-ghost btn-sm">Cancel</button>
+      <button onclick="submitEditHtml()" id="edit-html-save-btn" class="btn btn-primary btn-sm">Save changes</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Main layout ──────────────────────────────────────────── -->
+<div class="layout">
+
+  <!-- Left sidebar -->
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      <h2>Files</h2>
+    </div>
+
+    <!-- Upload drop zone -->
+    <div class="upload-area" id="drop-zone" onclick="document.getElementById('file-input').click()"
+         ondragover="event.preventDefault();this.classList.add('drag')"
+         ondragleave="this.classList.remove('drag')"
+         ondrop="handleDrop(event)">
+      <svg width="28" height="28" fill="none" stroke="#1a73e8" stroke-width="1.5" viewBox="0 0 24 24">
+        <path d="M12 16V8m0 0-3 3m3-3 3 3M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <p>Click or drag .html file</p>
+      <input type="file" id="file-input" accept=".html,text/html" onchange="uploadFile(this.files[0])">
+    </div>
+
+    <div class="sidebar-list" id="file-list">
+      <div class="empty-list">No files yet</div>
+    </div>
+  </aside>
+
+  <!-- Right content -->
+  <main class="content" id="content">
+    <div class="empty-state" id="empty-state">
+      <svg width="64" height="64" fill="none" stroke="currentColor" stroke-width="1" viewBox="0 0 24 24">
+        <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+      </svg>
+      <p>Select a file from the sidebar to manage invites &amp; review annotations</p>
+    </div>
+
+    <!-- File detail panel (hidden until file selected) -->
+    <div id="file-detail" style="display:none;">
+      <div class="panel">
+        <div class="panel-header">
+          <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+            <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <h3 id="detail-filename">—</h3>
+          <span id="detail-stats" style="font-size:12px;color:var(--muted);"></span>
+          <button class="btn btn-ghost btn-sm" onclick="previewFile()" title="Preview document with annotations">👁 Preview</button>
+          <button class="btn btn-ghost btn-sm" onclick="openEditHtml()" title="Edit the HTML text directly">✏️ Edit HTML</button>
+          <button class="btn btn-ghost btn-sm" onclick="openRevise()" title="Upload a new revision of this document">🔄 New revision</button>
+          <button class="btn btn-ghost btn-sm" onclick="openReplace()" title="Replace file content without creating a new revision">📝 Replace file</button>
+          <button class="btn btn-success btn-sm" onclick="exportFile()" title="Download HTML with accepted changes applied">⬇ Export HTML</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteFile()">Delete file</button>
+        </div>
+
+        <div class="tabs">
+          <button class="tab-btn active" onclick="switchTab('invites', this)">Invites</button>
+          <button class="tab-btn" onclick="switchTab('annotations', this)">Annotations</button>
+        </div>
+
+        <!-- ── Invites tab ── -->
+        <div class="tab-pane active" id="tab-invites">
+          <div class="form-row">
+            <div class="form-group">
+              <label>Reviewer Email</label>
+              <input type="email" id="inv-email" placeholder="reviewer@example.com">
+            </div>
+            <div class="form-group" style="max-width:180px;">
+              <label>Name (optional)</label>
+              <input type="text" id="inv-name" placeholder="Jane Smith">
+            </div>
+          </div>
+          <div class="form-group" style="margin-bottom:12px;">
+            <label>Personal message (optional)</label>
+            <textarea id="inv-message" rows="2" placeholder="Add a note to include in the invite email…"></textarea>
+          </div>
+          <div style="margin-bottom:16px;">
+            <button class="btn btn-primary" onclick="sendInvite()">Send Invite</button>
+          </div>
+          <div id="invite-list"><div class="empty-list">No invites yet</div></div>
+        </div>
+
+        <!-- ── Annotations tab ── -->
+        <div class="tab-pane" id="tab-annotations">
+          <div class="filter-bar">
+            <button class="filter-btn active" data-filter="all" onclick="setFilter('all',this)">All</button>
+            <button class="filter-btn" data-filter="pending"  onclick="setFilter('pending',this)">Pending</button>
+            <button class="filter-btn" data-filter="accepted" onclick="setFilter('accepted',this)">Accepted</button>
+            <button class="filter-btn" data-filter="rejected" onclick="setFilter('rejected',this)">Rejected</button>
+          </div>
+          <div id="annotation-list"><div class="empty-list">No annotations yet</div></div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- ── Toast ─────────────────────────────────────────────────── -->
+<div id="toast"></div>
+
+<script>
+'use strict';
+// ── State ──────────────────────────────────────────────────────
+var selectedFileId = null;
+var annFilter      = 'all';
+var allFiles       = [];
+var allInvites     = [];
+var allAnnotations = [];
+
+// ── Boot ───────────────────────────────────────────────────────
+(async function boot(){
+  try {
+    await api('GET', '/api/admin/me');
+    document.getElementById('login-overlay').style.display = 'none';
+    await loadFiles();
+    // Restore last position after refresh
+    const lastFile = localStorage.getItem('rv_lastFile');
+    const lastTab  = localStorage.getItem('rv_lastTab');
+    if(lastFile && allFiles.find(f => f.id === lastFile)){
+      await selectFile(lastFile);
+      if(lastTab && lastTab !== 'invites'){
+        const btn = document.querySelector(`.tab-btn[onclick*="'${lastTab}'"]`);
+        if(btn) switchTab(lastTab, btn);
+      }
+    }
+  } catch(e) {
+    // show login
+  }
+})();
+
+// ── Auth ───────────────────────────────────────────────────────
+async function doLogin(){
+  const pw  = document.getElementById('login-pw').value;
+  const err = document.getElementById('login-err');
+  err.textContent = '';
+  try {
+    await api('POST', '/api/admin/login', { password: pw });
+    document.getElementById('login-overlay').style.display = 'none';
+    loadFiles();
+  } catch(e) {
+    err.textContent = 'Invalid password.';
+  }
+}
+document.getElementById('login-pw').addEventListener('keydown', e => e.key === 'Enter' && doLogin());
+
+async function doLogout(){
+  await api('POST', '/api/admin/logout');
+  location.reload();
+}
+
+// ── Settings ──────────────────────────────────────────────────
+async function openSettings(){
+  const overlay = document.getElementById('settings-overlay');
+  overlay.style.display = 'flex';
+  // Load current setting
+  try {
+    const data = await api('GET', '/api/admin/settings');
+    setToggle('settings-notif', data.notificationsEnabled);
+  } catch(e) {}
+}
+function closeSettings(){
+  document.getElementById('settings-overlay').style.display = 'none';
+}
+function setToggle(id, enabled){
+  const track = document.getElementById(id + '-track');
+  if(track){
+    if(enabled){ track.classList.add('on'); } else { track.classList.remove('on'); }
+  }
+  const input = document.getElementById(id);
+  if(input) input.checked = enabled;
+}
+async function toggleNotifSetting(e){
+  e.stopPropagation();
+  const track = document.getElementById('settings-notif-track');
+  const current = track.classList.contains('on');
+  const next = !current;
+  setToggle('settings-notif', next);
+  try {
+    await api('PATCH', '/api/admin/settings', { notificationsEnabled: next });
+  } catch(ex) {
+    // revert on failure
+    setToggle('settings-notif', current);
+    alert('Failed to save setting.');
+  }
+}
+// Close overlay when clicking backdrop
+document.getElementById('settings-overlay').addEventListener('click', function(e){
+  if(e.target === this) closeSettings();
+});
+
+// ── Files ──────────────────────────────────────────────────────
+async function loadFiles(){
+  allFiles = await api('GET', '/api/admin/files');
+  renderFiles();
+  return allFiles;
+}
+
+// Persist collapse state across renders
+let collapsedFiles = new Set(JSON.parse(localStorage.getItem('rv_collapsed') || '[]'));
+
+function toggleCollapse(id){
+  if(collapsedFiles.has(id)) collapsedFiles.delete(id);
+  else collapsedFiles.add(id);
+  localStorage.setItem('rv_collapsed', JSON.stringify([...collapsedFiles]));
+  renderFiles();
+}
+
+function renderFiles(){
+  const el = document.getElementById('file-list');
+  if(!allFiles.length){ el.innerHTML = '<div class="empty-list">No files yet</div>'; return; }
+
+  // Build revision chains: map parentId → [children]
+  const childrenOf = {};
+  const rootFiles  = [];
+  allFiles.forEach(f => {
+    if(f.parent_id){
+      if(!childrenOf[f.parent_id]) childrenOf[f.parent_id] = [];
+      childrenOf[f.parent_id].push(f);
+    } else {
+      rootFiles.push(f);
+    }
+  });
+
+  function fileVersion(f){
+    let v = 1, cur = f;
+    while(cur.parent_id){ v++; cur = allFiles.find(x => x.id === cur.parent_id) || {}; }
+    return v;
+  }
+
+  function renderCard(f, extraClass){
+    const v        = fileVersion(f);
+    const children = childrenOf[f.id] || [];
+    const isLatest = children.length === 0;
+    const isRoot   = !f.parent_id;
+    const collapsed = isRoot && collapsedFiles.has(f.id);
+
+    const verBadge = v > 1
+      ? `<span class="ver-badge ver-badge-new">v${v}</span>`
+      : (children.length ? `<span class="ver-badge ver-badge-old">v1</span>` : '');
+
+    const toggleBtn = isRoot && children.length
+      ? `<button class="collapse-btn" onclick="event.stopPropagation();toggleCollapse('${f.id}')" title="${collapsed ? 'Expand revisions' : 'Collapse revisions'}">${collapsed ? '▶' : '▼'}</button>`
+      : '';
+
+    const card = `
+      <div class="${extraClass} file-card ${f.id === selectedFileId ? 'active' : ''}" onclick="selectFile('${f.id}')">
+        <div class="fname" title="${esc(f.name)}">${toggleBtn}<span class="fname-text">${esc(f.name)}</span>${verBadge}${isLatest && v > 1 ? '<span style="font-size:10px;color:var(--green);flex-shrink:0;">●</span>' : ''}</div>
+        <div class="fmeta">
+          <span class="badge"><span class="badge-dot dot-blue"></span>${f.invite_count} invited</span>
+          <span class="badge"><span class="badge-dot dot-orange"></span>${f.pending_invite_count} not opened</span>
+        </div>
+      </div>`;
+
+    if(!children.length) return card;
+    return card + `<div class="revision-children"${collapsed ? ' style="display:none"' : ''}>${children.map(c => renderCard(c, 'revision-card')).join('')}</div>`;
+  }
+
+  el.innerHTML = rootFiles.map(f => renderCard(f, '')).join('');
+}
+
+async function selectFile(id){
+  selectedFileId = id;
+  localStorage.setItem('rv_lastFile', id);
+  renderFiles();
+  document.getElementById('empty-state').style.display = 'none';
+  document.getElementById('file-detail').style.display = 'block';
+
+  const f = allFiles.find(x => x.id === id);
+  document.getElementById('detail-filename').textContent = f ? f.name : id;
+  document.getElementById('detail-stats').textContent =
+    f ? `${f.annotation_count} annotations · ${f.invite_count} reviewers` : '';
+
+  await Promise.all([loadInvites(), loadAnnotations()]);
+}
+
+async function deleteFile(){
+  if(!confirm('Delete this file and all its invites and annotations?')) return;
+  await api('DELETE', '/api/admin/files/' + selectedFileId);
+  selectedFileId = null;
+  document.getElementById('file-detail').style.display = 'none';
+  document.getElementById('empty-state').style.display = 'flex';
+  await loadFiles();
+  toast('File deleted');
+}
+
+// ── Revision ───────────────────────────────────────────────────
+let reviseFile = null;
+
+function openRevise(){
+  if(!selectedFileId){ toast('Select a file first', 'error'); return; }
+  const f = allFiles.find(x => x.id === selectedFileId);
+  document.getElementById('revise-fname').textContent = f ? f.name : '';
+  document.getElementById('revise-file-label').textContent = 'Click or drag new .html file here';
+  document.getElementById('revise-submit-btn').disabled = true;
+  document.getElementById('revise-reinvite').checked = true;
+  document.getElementById('revise-import').checked = true;
+  reviseFile = null;
+  const ov = document.getElementById('revise-overlay');
+  ov.style.display = 'flex';
+}
+
+function closeRevise(){
+  document.getElementById('revise-overlay').style.display = 'none';
+  reviseFile = null;
+}
+
+function selectReviseFile(file){
+  if(!file || !file.name.endsWith('.html')){ toast('Only .html files accepted', 'error'); return; }
+  reviseFile = file;
+  document.getElementById('revise-file-label').textContent = '✓ ' + file.name;
+  document.getElementById('revise-file-label').style.color = '#34a853';
+  document.getElementById('revise-submit-btn').disabled = false;
+}
+
+function handleReviseDrop(e){
+  e.preventDefault();
+  e.currentTarget.style.borderColor = '#e0e0e0';
+  e.currentTarget.style.background = '';
+  selectReviseFile(e.dataTransfer.files[0]);
+}
+
+async function submitRevision(){
+  if(!reviseFile){ toast('Please select a file', 'error'); return; }
+  const btn = document.getElementById('revise-submit-btn');
+  btn.disabled = true; btn.textContent = 'Uploading…';
+  const fd = new FormData();
+  fd.append('file', reviseFile);
+  fd.append('reInvite', document.getElementById('revise-reinvite').checked);
+  fd.append('importAnnotations', document.getElementById('revise-import').checked);
+  try {
+    const res = await fetch('/api/admin/files/' + selectedFileId + '/revise',
+      { method:'POST', body: fd, credentials:'include' });
+    if(!res.ok) throw new Error((await res.json()).error);
+    const data = await res.json();
+    closeRevise();
+    await loadFiles();
+    await selectFile(data.id);
+    toast(`Revision created · ${data.invited} reviewer${data.invited!==1?'s':''} notified · ${data.imported} annotation${data.imported!==1?'s':''} imported`, 'success');
+  } catch(e){
+    toast('Failed: ' + e.message, 'error');
+    btn.disabled = false; btn.textContent = 'Upload revision';
+  }
+}
+
+document.getElementById('revise-overlay').addEventListener('click', function(e){
+  if(e.target === this) closeRevise();
+});
+
+// ── Replace file (in-place) ────────────────────────────────────
+let replaceFile = null;
+
+function openReplace(){
+  if(!selectedFileId){ toast('Select a file first', 'error'); return; }
+  const f = allFiles.find(x => x.id === selectedFileId);
+  document.getElementById('replace-fname').textContent = f ? f.name : '';
+  document.getElementById('replace-file-label').textContent = 'Click or drag new .html file here';
+  document.getElementById('replace-file-label').style.color = '';
+  document.getElementById('replace-submit-btn').disabled = true;
+  replaceFile = null;
+  document.getElementById('replace-overlay').style.display = 'flex';
+}
+
+function closeReplace(){
+  document.getElementById('replace-overlay').style.display = 'none';
+  replaceFile = null;
+}
+
+function selectReplaceFile(file){
+  if(!file || !file.name.endsWith('.html')){ toast('Only .html files accepted', 'error'); return; }
+  replaceFile = file;
+  document.getElementById('replace-file-label').textContent = '✓ ' + file.name;
+  document.getElementById('replace-file-label').style.color = '#34a853';
+  document.getElementById('replace-submit-btn').disabled = false;
+}
+
+function handleReplaceDrop(e){
+  e.preventDefault();
+  e.currentTarget.style.borderColor = '#e0e0e0';
+  e.currentTarget.style.background = '';
+  selectReplaceFile(e.dataTransfer.files[0]);
+}
+
+async function submitReplace(){
+  if(!replaceFile){ toast('Please select a file', 'error'); return; }
+  const btn = document.getElementById('replace-submit-btn');
+  btn.disabled = true; btn.textContent = 'Uploading…';
+  const fd = new FormData();
+  fd.append('file', replaceFile);
+  try {
+    const res = await fetch('/api/admin/files/' + selectedFileId + '/content',
+      { method:'PATCH', body: fd, credentials:'include' });
+    if(!res.ok) throw new Error((await res.json()).error);
+    const data = await res.json();
+    closeReplace();
+    await loadFiles();
+    await selectFile(selectedFileId);
+    toast('File content replaced: ' + data.name, 'success');
+  } catch(e){
+    toast('Failed: ' + e.message, 'error');
+    btn.disabled = false; btn.textContent = 'Replace content';
+  }
+}
+
+document.getElementById('replace-overlay').addEventListener('click', function(e){
+  if(e.target === this) closeReplace();
+});
+
+// ── Upload ─────────────────────────────────────────────────────
+function handleDrop(e){
+  e.preventDefault();
+  document.getElementById('drop-zone').classList.remove('drag');
+  const file = e.dataTransfer.files[0];
+  if(file) uploadFile(file);
+}
+
+async function uploadFile(file){
+  if(!file || !file.name.endsWith('.html')){ toast('Only .html files are accepted', 'error'); return; }
+  const fd = new FormData();
+  fd.append('file', file);
+  try {
+    const res = await fetch('/api/admin/files', { method:'POST', body: fd, credentials:'include' });
+    if(!res.ok) throw new Error((await res.json()).error);
+    toast('File uploaded: ' + file.name, 'success');
+    await loadFiles();
+  } catch(e){ toast(e.message, 'error'); }
+  document.getElementById('file-input').value = '';
+}
+
+// ── Invites ────────────────────────────────────────────────────
+async function loadInvites(){
+  allInvites = await api('GET', '/api/admin/invites?fileId=' + selectedFileId);
+  renderInvites();
+}
+
+function renderInvites(){
+  const el = document.getElementById('invite-list');
+  const rows = allInvites;
+  if(!rows.length){ el.innerHTML = '<div class="empty-list">No invites sent yet</div>'; return; }
+  el.innerHTML = rows.map(i => `
+    <div class="invite-row">
+      <div class="invite-avatar" style="background:${avatarColor(i.email)};">${avatarInitial(i.name || i.email)}</div>
+      <div class="invite-info">
+        <div class="iname" id="iname-${i.id}" onclick="editInviteName('${i.id}')" title="Click to edit name"
+             style="cursor:pointer;display:flex;align-items:center;gap:6px;">
+          ${esc(i.name || '—')}
+          <span style="font-size:10px;color:var(--muted);opacity:.6;">✏️</span>
+        </div>
+        <div id="iname-form-${i.id}" style="display:none;">
+          <input id="iname-input-${i.id}" type="text" value="${esc(i.name || '')}" placeholder="Enter name…"
+                 style="font-size:13px;border:1px solid var(--blue);border-radius:5px;padding:3px 7px;width:140px;outline:none;"
+                 onkeydown="if(event.key==='Enter') saveInviteName('${i.id}');if(event.key==='Escape') cancelInviteName('${i.id}');"
+                 onclick="event.stopPropagation()">
+          <button onclick="saveInviteName('${i.id}')" style="margin-left:4px;background:var(--blue);color:#fff;border:none;border-radius:4px;padding:3px 8px;font-size:12px;cursor:pointer;">✓</button>
+          <button onclick="cancelInviteName('${i.id}')" style="margin-left:2px;background:none;border:1px solid var(--border);border-radius:4px;padding:3px 6px;font-size:12px;cursor:pointer;">✕</button>
+        </div>
+        <div class="iemail">${esc(i.email)}</div>
+        <div class="ifile" style="margin-top:2px;">${i.annotation_count} annotation${i.annotation_count !== 1 ? 's' : ''} · Sent ${timeAgo(i.created_at)}</div>
+      </div>
+      <span class="status-chip chip-${i.status}">${i.status}</span>
+      ${i.status !== 'revoked'
+        ? `<button class="btn btn-ghost btn-sm" title="Copy invite link to clipboard" onclick="copyInviteLink(event,'${i.invite_code}')">🔗 Copy link</button>
+           <button class="btn btn-ghost btn-sm" onclick="revokeInvite('${i.id}')">Revoke</button>`
+        : '<span style="font-size:12px;color:var(--muted);">—</span>'}
+    </div>
+  `).join('');
+}
+
+// sendInvite is defined below (includes optional custom message)
+
+async function revokeInvite(id){
+  if(!confirm('Revoke this invite? The reviewer will lose access immediately.')) return;
+  await api('PATCH', `/api/admin/invites/${id}/revoke`);
+  toast('Invite revoked');
+  await loadInvites();
+  await loadFiles();
+}
+
+function editInviteName(id){
+  document.getElementById('iname-' + id).style.display = 'none';
+  const form = document.getElementById('iname-form-' + id);
+  form.style.display = 'flex';
+  form.style.alignItems = 'center';
+  document.getElementById('iname-input-' + id).focus();
+}
+
+function cancelInviteName(id){
+  document.getElementById('iname-form-' + id).style.display = 'none';
+  document.getElementById('iname-' + id).style.display = 'flex';
+}
+
+async function saveInviteName(id){
+  const val = document.getElementById('iname-input-' + id).value.trim();
+  await api('PATCH', '/api/admin/invites/' + id, { name: val });
+  await loadInvites();
+  toast('Name updated');
+}
+
+function copyInviteLink(e, code){
+  e.stopPropagation();
+  const url = window.location.origin + '/review/invite/' + code;
+  navigator.clipboard.writeText(url).then(() => {
+    const btn = e.currentTarget;
+    const orig = btn.textContent;
+    btn.textContent = '✓ Copied!';
+    setTimeout(() => { btn.textContent = orig; }, 2000);
+  }).catch(() => {
+    // Fallback for older browsers
+    prompt('Copy this invite link:', url);
+  });
+}
+
+// ── Annotations ────────────────────────────────────────────────
+async function loadAnnotations(){
+  allAnnotations = await api('GET', '/api/admin/annotations?fileId=' + selectedFileId);
+  renderAnnotations();
+}
+
+function setFilter(f, btn){
+  annFilter = f;
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderAnnotations();
+}
+
+function renderAnnotations(){
+  const el = document.getElementById('annotation-list');
+  let rows = allAnnotations;
+  if(annFilter !== 'all') rows = rows.filter(a => a.status === annFilter);
+  if(!rows.length){ el.innerHTML = '<div class="empty-list">No annotations</div>'; return; }
+
+  el.innerHTML = rows.map(a => {
+    const typeChip = a.type === 'comment'
+      ? '<span class="ann-type-chip chip-comment">💬 Comment</span>'
+      : '<span class="ann-type-chip chip-change">✏️ Change</span>';
+    const statusChip = a.status === 'pending'
+      ? ''
+      : a.status === 'accepted'
+        ? '<span class="ann-type-chip chip-accepted-ann">✓ Accepted</span>'
+        : '<span class="ann-type-chip chip-rejected-ann">✗ Rejected</span>';
+
+    const content = a.type === 'comment'
+      ? `<div class="ann-content">💬 ${esc(a.comment)}</div>`
+      : `<div class="ann-change">
+           <span class="ann-old">${esc(a.selected_text)}</span>
+           <span class="ann-arrow">→</span>
+           <span class="ann-new">${esc(a.suggested_text)}</span>
+         </div>`;
+
+    const importedBadge = a.source_ann_id
+      ? '<span class="ann-type-chip" style="background:#f3e5f5;color:#6a1b9a;" title="Imported from previous revision">↩ from prev</span>'
+      : '';
+
+    const applyBtn = (a.status === 'accepted' && a.type === 'change' && !a.applied)
+      ? `<button class="btn btn-primary btn-sm" onclick="applyAnn('${a.id}')" title="Apply this text change directly to the document">⚡ Apply to document</button>`
+      : '';
+    const appliedBadge = a.applied
+      ? '<span class="ann-type-chip" style="background:#e8f5e9;color:#1b5e20;">✓ Applied to doc</span>'
+      : '';
+
+    const actions = a.status === 'pending'
+      ? `<div class="ann-actions">
+           <button class="btn btn-success btn-sm" onclick="reviewAnn('${a.id}','accepted')">✓ Accept</button>
+           <button class="btn btn-danger btn-sm"  onclick="reviewAnn('${a.id}','rejected')">✗ Reject</button>
+         </div>`
+      : `<div class="ann-actions">
+           ${applyBtn}
+           <button class="btn btn-ghost btn-sm" onclick="reviewAnn('${a.id}','pending')">↩ Reset</button>
+         </div>`;
+
+    return `<div class="ann-row" id="ann-${a.id}">
+      <div class="ann-header">
+        ${typeChip} ${statusChip} ${appliedBadge} ${importedBadge}
+        <span class="ann-reviewer" style="margin-left:auto;">
+          ${esc(a.reviewer_name || a.reviewer_email)} · ${timeAgo(a.created_at)}
+        </span>
+      </div>
+      <div class="ann-selected">"${esc(a.selected_text)}"</div>
+      ${content}
+      ${actions}
+      <button class="reply-toggle" onclick="toggleReplies('${a.id}')">💬 Replies <span id="reply-count-${a.id}"></span></button>
+      <div class="reply-thread" id="reply-thread-${a.id}">
+        <div id="reply-msgs-${a.id}"></div>
+        <div class="reply-input-row">
+          <input type="text" id="reply-input-${a.id}" placeholder="Write a reply…" onkeydown="if(event.key==='Enter') submitReply('${a.id}')">
+          <button class="btn btn-primary btn-sm" onclick="submitReply('${a.id}')">Send</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function reviewAnn(id, status){
+  await api('PATCH', '/api/admin/annotations/' + id, { status });
+  await loadAnnotations();
+  toast(status === 'accepted' ? 'Change accepted ✓' : status === 'rejected' ? 'Change rejected' : 'Reset to pending', 'success');
+}
+
+async function applyAnn(id){
+  if(!confirm('Apply this text change directly to the document?\n\nThe stored HTML will be updated immediately. This cannot be undone.')) return;
+  try {
+    await api('POST', '/api/admin/annotations/' + id + '/apply');
+    await loadAnnotations();
+    await loadFiles();
+    toast('Change applied to document ✓', 'success');
+  } catch(e){
+    toast('Could not apply: ' + e.message, 'error');
+  }
+}
+
+// ── Tabs ───────────────────────────────────────────────────────
+function switchTab(name, btn){
+  document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  btn.classList.add('active');
+  localStorage.setItem('rv_lastTab', name);
+}
+
+// ── Utilities ──────────────────────────────────────────────────
+async function api(method, url, body){
+  const opts = { method, credentials:'include', headers:{} };
+  if(body){ opts.headers['Content-Type'] = 'application/json'; opts.body = JSON.stringify(body); }
+  const res = await fetch(url, opts);
+  if(!res.ok){ const j = await res.json().catch(() => ({})); throw new Error(j.error || res.statusText); }
+  return res.json().catch(() => ({}));
+}
+
+function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+function toast(msg, type=''){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'show ' + type;
+  clearTimeout(t._tid);
+  t._tid = setTimeout(() => t.className = '', 3000);
+}
+
+function timeAgo(iso){
+  if(!iso) return '';
+  // SQLite stores as "YYYY-MM-DD HH:MM:SS" — normalise to ISO 8601 + UTC
+  const normalised = iso.replace(' ', 'T').replace(/(\.\d+)?$/, 'Z');
+  const s = Math.floor((Date.now() - new Date(normalised)) / 1000);
+  if(s < 60)    return 'just now';
+  if(s < 3600)  return Math.floor(s/60) + 'm ago';
+  if(s < 86400) return Math.floor(s/3600) + 'h ago';
+  return Math.floor(s/86400) + 'd ago';
+}
+
+function avatarColor(str){
+  let h = 0;
+  for(let i=0;i<str.length;i++) h = ((h<<5)-h)+str.charCodeAt(i);
+  const colors = ['#1a73e8','#34a853','#ea4335','#fbbc04','#9c27b0','#ff5722','#00bcd4'];
+  return colors[Math.abs(h) % colors.length];
+}
+function avatarInitial(s){ return (s||'?')[0].toUpperCase(); }
+
+// ── Export HTML ────────────────────────────────────────────────
+function exportFile(){
+  if(!selectedFileId) return;
+  const link = document.createElement('a');
+  link.href = '/api/admin/files/' + selectedFileId + '/export';
+  link.download = '';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+
+// ── Preview ───────────────────────────────────────────────────
+function previewFile(){
+  if(!selectedFileId) return;
+  window.open('/preview.html?fileId=' + selectedFileId, '_blank');
+}
+
+// ── Invite ─────────────────────────────────────────────────────
+async function sendInvite(){
+  const email   = document.getElementById('inv-email').value.trim();
+  const name    = document.getElementById('inv-name').value.trim();
+  const message = document.getElementById('inv-message').value.trim();
+  if(!email){ toast('Please enter an email address', 'error'); return; }
+  try {
+    await api('POST', '/api/admin/invites', { fileId: selectedFileId, email, name, message });
+    toast('Invite sent to ' + email, 'success');
+    document.getElementById('inv-email').value    = '';
+    document.getElementById('inv-name').value     = '';
+    document.getElementById('inv-message').value  = '';
+    await loadInvites();
+    await loadFiles();
+  } catch(e){ toast(e.message, 'error'); }
+}
+
+// ── Reply threads ──────────────────────────────────────────────
+var repliesCache = {};
+
+async function toggleReplies(annId){
+  const thread = document.getElementById('reply-thread-' + annId);
+  if(!thread) return;
+  const isOpen = thread.classList.contains('open');
+  if(isOpen){
+    thread.classList.remove('open');
+  } else {
+    thread.classList.add('open');
+    await loadReplies(annId);
+  }
+}
+
+async function loadReplies(annId){
+  try {
+    const replies = await api('GET', '/api/admin/annotations/' + annId + '/replies');
+    repliesCache[annId] = replies;
+    renderReplies(annId, replies);
+    const countEl = document.getElementById('reply-count-' + annId);
+    if(countEl) countEl.textContent = replies.length ? '(' + replies.length + ')' : '';
+  } catch(e){ /* silent */ }
+}
+
+function renderReplies(annId, replies){
+  const el = document.getElementById('reply-msgs-' + annId);
+  if(!el) return;
+  if(!replies.length){ el.innerHTML = '<div style="font-size:12px;color:var(--muted);padding:4px 0;">No replies yet. Be the first to comment!</div>'; return; }
+  el.innerHTML = replies.map(r => {
+    const isAdmin = r.author_role === 'admin';
+    const bg = isAdmin ? '#1a73e8' : avatarColor(r.author_name || r.author_email || '?');
+    const initials = avatarInitial(r.author_name || r.author_email || '?');
+    const isMine = isAdmin; // admin page: own = admin replies
+    const actions = isMine
+      ? `<span class="reply-action-btn" onclick="editReply(event,'${r.id}','${annId}')">Edit</span>` +
+        `<span class="reply-action-btn reply-del" onclick="deleteReply(event,'${r.id}','${annId}')">Delete</span>`
+      : '';
+    return `<div class="reply-msg" id="reply-row-${r.id}">
+      <div class="reply-avatar" style="background:${bg};">${initials}</div>
+      <div class="reply-bubble">
+        <div class="reply-meta">${esc(r.author_name || (isAdmin ? 'Admin' : r.author_email))} · ${timeAgo(r.created_at)}${actions}</div>
+        <div id="reply-text-${r.id}">${esc(r.message)}</div>
+        <div id="reply-edit-form-${r.id}" style="display:none;">
+          <textarea id="reply-edit-input-${r.id}" rows="2" style="width:100%;font-size:12px;border:1px solid var(--blue);border-radius:4px;padding:4px 6px;font-family:inherit;resize:vertical;outline:none;">${esc(r.message)}</textarea>
+          <div style="display:flex;gap:5px;margin-top:4px;">
+            <button onclick="saveReply(event,'${r.id}','${annId}')" style="background:var(--blue);color:#fff;border:none;border-radius:4px;padding:3px 10px;font-size:11px;cursor:pointer;">Save</button>
+            <button onclick="cancelReplyEdit(event,'${r.id}')" style="background:none;border:1px solid var(--border);border-radius:4px;padding:3px 8px;font-size:11px;cursor:pointer;">Cancel</button>
+          </div>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function editReply(e, replyId, annId){
+  e.stopPropagation();
+  document.getElementById('reply-text-' + replyId).style.display = 'none';
+  document.getElementById('reply-edit-form-' + replyId).style.display = 'block';
+  const inp = document.getElementById('reply-edit-input-' + replyId);
+  if(inp){ inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); }
+}
+
+function cancelReplyEdit(e, replyId){
+  e.stopPropagation();
+  document.getElementById('reply-text-' + replyId).style.display = '';
+  document.getElementById('reply-edit-form-' + replyId).style.display = 'none';
+}
+
+async function saveReply(e, replyId, annId){
+  e.stopPropagation();
+  const inp = document.getElementById('reply-edit-input-' + replyId);
+  const msg = inp ? inp.value.trim() : '';
+  if(!msg){ toast('Cannot save empty reply', 'error'); return; }
+  try {
+    await api('PATCH', '/api/admin/replies/' + replyId, { message: msg });
+    await loadReplies(annId);
+  } catch(err){ toast(err.message, 'error'); }
+}
+
+async function deleteReply(e, replyId, annId){
+  e.stopPropagation();
+  if(!confirm('Delete this reply?')) return;
+  try {
+    await api('DELETE', '/api/admin/replies/' + replyId);
+    await loadReplies(annId);
+  } catch(err){ toast(err.message, 'error'); }
+}
+
+async function submitReply(annId){
+  const input = document.getElementById('reply-input-' + annId);
+  if(!input) return;
+  const body = input.value.trim();
+  if(!body) return;
+  try {
+    await api('POST', '/api/admin/annotations/' + annId + '/replies', { message: body });
+    input.value = '';
+    await loadReplies(annId);
+  } catch(e){ toast(e.message, 'error'); }
+}
+
+// ── Edit HTML (text-only blocks) ───────────────────────────────
+var _editDoc      = null;   // parsed DOM
+var _editRawHtml  = '';     // original raw string (to detect full-doc vs fragment)
+var _editBlocks   = [];     // [{ el, origText }]
+
+var EDIT_TAGS = ['h1','h2','h3','h4','h5','h6','p','li','td','th','dt','dd','caption','figcaption','blockquote'];
+var HEADING_TAGS = new Set(['h1','h2','h3','h4','h5','h6']);
+
+async function openEditHtml(){
+  if(!selectedFileId){ toast('Select a file first', 'error'); return; }
+  const f = allFiles.find(x => x.id === selectedFileId);
+  document.getElementById('edit-html-fname').textContent = f ? f.name : '';
+  document.getElementById('edit-html-blocks').innerHTML =
+    '<div style="padding:32px;text-align:center;color:var(--muted);">Loading…</div>';
+  document.getElementById('edit-html-overlay').style.display = 'flex';
+  try {
+    const res = await fetch('/api/admin/file/' + selectedFileId + '/raw', { credentials:'include' });
+    if(!res.ok) throw new Error(res.statusText);
+    _editRawHtml = await res.text();
+    _editDoc = new DOMParser().parseFromString(_editRawHtml, 'text/html');
+
+    // Collect leaf text blocks (skip if nested inside another target tag)
+    _editBlocks = [];
+    _editDoc.body.querySelectorAll(EDIT_TAGS.join(',')).forEach(function(el){
+      if(el.parentElement && el.parentElement.closest(EDIT_TAGS.join(','))) return;
+      const text = el.textContent.trim();
+      if(!text) return;
+      _editBlocks.push({ el: el, origText: el.textContent });
+    });
+
+    renderEditBlocks();
+  } catch(e){
+    toast('Failed to load: ' + e.message, 'error');
+    closeEditHtml();
+  }
+}
+
+function renderEditBlocks(){
+  var container = document.getElementById('edit-html-blocks');
+  if(!_editBlocks.length){
+    container.innerHTML = '<div style="padding:32px;text-align:center;color:var(--muted);">No text blocks found.</div>';
+    return;
+  }
+
+  // Build HTML for each block
+  var parts = [];
+  var lastSection = '';
+  _editBlocks.forEach(function(b, i){
+    var tag = b.el.tagName.toLowerCase();
+    var isH = HEADING_TAGS.has(tag);
+
+    // Section divider before a top-level heading
+    if(isH && (tag === 'h1' || tag === 'h2')){
+      if(lastSection){
+        parts.push('<div style="height:1px;background:var(--border);margin:10px 0 14px;"></div>');
+      }
+      lastSection = b.el.textContent.trim();
+    }
+
+    var tagColor = isH ? '#1a73e8' : '#9e9e9e';
+    var fontSize  = tag==='h1' ? '17px' : tag==='h2' ? '15px' : tag==='h3' ? '14px' : '13px';
+    var fontWeight = isH ? '600' : 'normal';
+    var topPad  = isH ? '10px' : '4px';
+
+    parts.push(
+      '<div style="display:flex;gap:10px;align-items:flex-start;padding:' + topPad + ' 0;">' +
+        '<div style="min-width:32px;padding-top:7px;font-size:9px;font-weight:700;letter-spacing:.6px;' +
+              'text-align:right;color:' + tagColor + ';text-transform:uppercase;flex-shrink:0;">' +
+          tag.toUpperCase() +
+        '</div>' +
+        '<textarea id="eblk-' + i + '" rows="1"' +
+          ' style="flex:1;font-family:inherit;font-size:' + fontSize + ';font-weight:' + fontWeight + ';' +
+                  'border:1px solid transparent;border-radius:5px;padding:5px 8px;' +
+                  'resize:none;overflow:hidden;outline:none;background:transparent;line-height:1.5;transition:border-color .15s,background .15s;"' +
+          ' oninput="ehResize(this)"' +
+          ' onfocus="this.style.borderColor=\'var(--blue)\';this.style.background=\'#f0f6ff\'"' +
+          ' onblur="this.style.borderColor=\'transparent\';this.style.background=\'transparent\'"' +
+        '>' + esc(b.origText) + '</textarea>' +
+      '</div>'
+    );
+  });
+
+  container.innerHTML = parts.join('');
+  container.querySelectorAll('textarea').forEach(function(ta){ ehResize(ta); });
+}
+
+function ehResize(ta){
+  ta.style.height = 'auto';
+  ta.style.height = ta.scrollHeight + 'px';
+}
+
+function closeEditHtml(){
+  document.getElementById('edit-html-overlay').style.display = 'none';
+  _editDoc = null; _editRawHtml = ''; _editBlocks = [];
+}
+
+async function submitEditHtml(){
+  if(!_editDoc) return;
+  var anyChanged = false;
+  _editBlocks.forEach(function(b, i){
+    var ta = document.getElementById('eblk-' + i);
+    if(!ta) return;
+    var newText = ta.value;
+    if(newText !== b.origText){
+      b.el.textContent = newText;
+      anyChanged = true;
+    }
+  });
+  if(!anyChanged){ closeEditHtml(); return; }
+
+  var btn = document.getElementById('edit-html-save-btn');
+  btn.disabled = true; btn.textContent = 'Saving…';
+  try {
+    var isFullDoc = /^\s*(<!doctype|<html)/i.test(_editRawHtml);
+    var content = isFullDoc
+      ? _editDoc.documentElement.outerHTML
+      : _editDoc.body.innerHTML;
+    await api('PATCH', '/api/admin/files/' + selectedFileId + '/text', { content: content });
+    closeEditHtml();
+    toast('Text saved ✓', 'success');
+  } catch(e){
+    toast('Save failed: ' + e.message, 'error');
+    btn.disabled = false; btn.textContent = 'Save changes';
+  }
+}
+
+document.getElementById('edit-html-overlay').addEventListener('click', function(e){
+  if(e.target === this) closeEditHtml();
+});
+
+/* ── Presence Indicators ── */
+var presenceFileId = null;
+var presenceUserId = null;
+var presencePollInterval = null;
+
+function generateUserId(){
+  var stored = localStorage.getItem('presenceUserId');
+  if(stored) return stored;
+  var id = 'user_' + Math.random().toString(36).substr(2, 9);
+  localStorage.setItem('presenceUserId', id);
+  return id;
+}
+
+function startPresenceTracking(fileId){
+  presenceFileId = fileId;
+  presenceUserId = generateUserId();
+  setPresenceActive();
+  if(presencePollInterval) clearInterval(presencePollInterval);
+  presencePollInterval = setInterval(function(){
+    setPresenceActive();
+    pollPresence();
+  }, 2000);
+}
+
+function stopPresenceTracking(){
+  if(presencePollInterval) clearInterval(presencePollInterval);
+  presenceFileId = null;
+}
+
+function setPresenceActive(){
+  if(!presenceFileId) return;
+  fetch('/api/presence/set-active', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ fileId: presenceFileId })
+  }).catch(function(err){ console.log('Presence error:', err); });
+}
+
+function pollPresence(){
+  if(!presenceFileId) return;
+  fetch('/api/presence/active/' + presenceFileId)
+    .then(function(r){ return r.json(); })
+    .then(function(users){ updatePresenceDisplay(users); })
+    .catch(function(err){ console.log('Presence poll error:', err); });
+}
+
+function updatePresenceDisplay(users){
+  var container = document.getElementById('presence-container');
+  container.innerHTML = '';
+  var others = users.filter(function(u){ return u.email !== (adminEmail || 'admin'); });
+  var colors = ['linear-gradient(135deg,#667eea,#764ba2)', 'linear-gradient(135deg,#f093fb,#f5576c)', 'linear-gradient(135deg,#4facfe,#00f2fe)', 'linear-gradient(135deg,#43e97b,#38f9d7)', 'linear-gradient(135deg,#fa709a,#fee140)'];
+  others.forEach(function(user, idx){
+    var circle = document.createElement('div');
+    circle.className = 'presence-circle';
+    circle.style.background = colors[idx % colors.length];
+    circle.textContent = (user.name || user.email || 'U').charAt(0).toUpperCase();
+    var tooltip = document.createElement('div');
+    tooltip.className = 'presence-tooltip';
+    tooltip.textContent = (user.name || 'Unknown') + ' (' + user.email + ')';
+    circle.appendChild(tooltip);
+    container.appendChild(circle);
+  });
+}
+
+/* ── Presence Indicators ── */
+var presenceFileId = null;
+var presenceUserId = null;
+var presencePollInterval = null;
+
+function generateUserId(){
+  var stored = localStorage.getItem('presenceUserId');
+  if(stored) return stored;
+  var id = 'user_' + Math.random().toString(36).substr(2, 9);
+  localStorage.setItem('presenceUserId', id);
+  return id;
+}
+
+function startPresenceTracking(fileId){
+  presenceFileId = fileId;
+  presenceUserId = generateUserId();
+  setPresenceActive();
+  if(presencePollInterval) clearInterval(presencePollInterval);
+  presencePollInterval = setInterval(function(){
+    setPresenceActive();
+    pollPresence();
+  }, 2000);
+}
+
+function stopPresenceTracking(){
+  if(presencePollInterval) clearInterval(presencePollInterval);
+  presenceFileId = null;
+}
+
+function setPresenceActive(){
+  if(!presenceFileId) return;
+  fetch('/api/presence/set-active', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ fileId: presenceFileId })
+  }).catch(function(err){ console.log('Presence error:', err); });
+}
+
+function pollPresence(){
+  if(!presenceFileId) return;
+  fetch('/api/presence/active/' + presenceFileId)
+    .then(function(r){ return r.json(); })
+    .then(function(users){ updatePresenceDisplay(users); })
+    .catch(function(err){ console.log('Presence poll error:', err); });
+}
+
+function updatePresenceDisplay(users){
+  var container = document.getElementById('presence-container');
+  container.innerHTML = '';
+  var others = users.filter(function(u){ return u.email !== (adminEmail || 'admin'); });
+  var colors = ['linear-gradient(135deg,#667eea,#764ba2)', 'linear-gradient(135deg,#f093fb,#f5576c)', 'linear-gradient(135deg,#4facfe,#00f2fe)', 'linear-gradient(135deg,#43e97b,#38f9d7)', 'linear-gradient(135deg,#fa709a,#fee140)'];
+  others.forEach(function(user, idx){
+    var circle = document.createElement('div');
+    circle.className = 'presence-circle';
+    circle.style.background = colors[idx % colors.length];
+    circle.textContent = (user.name || user.email || 'U').charAt(0).toUpperCase();
+    var tooltip = document.createElement('div');
+    tooltip.className = 'presence-tooltip';
+    tooltip.textContent = (user.name || 'Unknown') + ' (' + user.email + ')';
+    circle.appendChild(tooltip);
+    container.appendChild(circle);
+  });
+}
+</script>
+</body>
+</html>

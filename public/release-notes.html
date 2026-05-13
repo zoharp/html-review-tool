@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Release Notes — HTML Review Tool</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Segoe UI', Arial, sans-serif;
+    background: #f8f9fa;
+    color: #202124;
+    padding: 24px;
+    line-height: 1.6;
+  }
+  .container {
+    max-width: 900px;
+    margin: 0 auto;
+    background: #fff;
+    border-radius: 12px;
+    padding: 40px;
+    box-shadow: 0 2px 8px rgba(0,0,0,.1);
+  }
+  h1 { font-size: 32px; margin-bottom: 8px; color: #1a73e8; }
+  .version { font-size: 14px; color: #5f6368; margin-bottom: 24px; }
+
+  h2 { font-size: 20px; margin-top: 32px; margin-bottom: 12px; color: #202124; border-bottom: 2px solid #1a73e8; padding-bottom: 8px; }
+  h3 { font-size: 16px; margin-top: 20px; margin-bottom: 8px; color: #1a73e8; }
+
+  ul, ol { margin-left: 24px; margin-bottom: 16px; }
+  li { margin-bottom: 6px; }
+
+  table { width: 100%; border-collapse: collapse; margin-top: 12px; margin-bottom: 24px; }
+  th, td { padding: 10px; text-align: left; border-bottom: 1px solid #e0e0e0; }
+  th { background: #f8f9fa; font-weight: 600; }
+
+  a { color: #1a73e8; text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  .back-link { display: inline-block; margin-bottom: 24px; }
+  .back-link:before { content: '← '; }
+
+  pre { background: #f8f9fa; padding: 12px; border-radius: 6px; overflow-x: auto; margin: 12px 0; }
+  code { font-family: 'Courier New', monospace; background: #f8f9fa; padding: 2px 6px; border-radius: 3px; }
+
+  .loading { color: #5f6368; font-style: italic; }
+  .error { color: #ea4335; }
+
+  footer { position: fixed; bottom: 12px; right: 16px; font-size: 12px; color: rgba(0,0,0,.5); z-index: 999; }
+</style>
+</head>
+<body>
+
+<div class="container">
+  <a href="admin.html" class="back-link">Admin Dashboard</a>
+
+  <h1>Release Notes</h1>
+  <div id="content" class="loading">Loading release notes...</div>
+</div>
+
+<footer></footer>
+
+<script>
+'use strict';
+
+async function loadReleaseNotes() {
+  const container = document.getElementById('content');
+  try {
+    const res = await fetch('/api/release-notes');
+    if (!res.ok) throw new Error('Failed to load release notes');
+    const data = await res.json();
+
+    // Convert markdown to HTML (simple approach)
+    let html = data.notes
+      .replace(/^# (.*?)$/gm, '<h1>$1</h1>')
+      .replace(/^## (.*?)$/gm, '<h2>$1</h2>')
+      .replace(/^### (.*?)$/gm, '<h3>$1</h3>')
+      .replace(/`([^`]+)`/g, '<code>$1</code>')
+      .replace(/\n\n/g, '</p><p>')
+      .replace(/^\- (.*?)$/gm, '<li>$1</li>')
+      .replace(/^\d+\. (.*?)$/gm, '<li>$1</li>')
+      .replace(/(<li>.*<\/li>)/s, '<ul>$1</ul>')
+      .replace(/<li>/g, '<li>')
+      .replace(/^(\| .*?\|)$/gm, (match) => {
+        const cells = match.split('|').slice(1, -1).map(c => '<td>' + c.trim() + '</td>').join('');
+        return '<tr>' + cells + '</tr>';
+      });
+
+    // Wrap table rows
+    html = html.replace(/(<tr>.*?<\/tr>)/s, '<table>$1</table>');
+
+    container.innerHTML = '<p>' + html + '</p>';
+  } catch (e) {
+    container.innerHTML = '<p class="error">Error loading release notes: ' + e.message + '</p>';
+  }
+
+  // Load and display version
+  fetch('/api/version').then(r => r.json()).then(d => {
+    const footer = document.querySelector('footer');
+    if(footer) footer.innerHTML = 'v' + d.version;
+  }).catch(() => {});
+}
+
+loadReleaseNotes();
+</script>
+
+</body>
+</html>
